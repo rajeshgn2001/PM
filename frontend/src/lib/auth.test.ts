@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getStoredAuth, loginUser, logoutUser } from "./auth";
+import { mockLoginFetch } from "@/test/fetchMock";
 
 describe("auth module", () => {
   beforeEach(() => {
-    localStorage.clear();
+    sessionStorage.clear();
+    mockLoginFetch();
   });
 
-  it("returns unauthenticated when localStorage is empty", () => {
+  it("returns unauthenticated when sessionStorage is empty", () => {
     const auth = getStoredAuth();
     expect(auth.isAuthenticated).toBe(false);
     expect(auth.username).toBeNull();
@@ -25,6 +27,13 @@ describe("auth module", () => {
     const auth = getStoredAuth();
     expect(auth.isAuthenticated).toBe(true);
     expect(auth.username).toBe("user");
+  });
+
+  it("reports when the server is unreachable", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("offline"))));
+    const result = await loginUser("user", "password");
+    expect(result).toEqual({ success: false, error: "Unable to reach the server" });
+    expect(getStoredAuth().isAuthenticated).toBe(false);
   });
 
   it("clears credentials on logout", async () => {

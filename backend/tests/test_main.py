@@ -42,24 +42,9 @@ async def test_login_failure():
 
 
 @pytest.mark.asyncio
-async def test_auth_me_and_logout():
+async def test_logout():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        # Check unauthenticated
-        res_unauth = await client.get("/api/auth/me")
-        assert res_unauth.status_code == 200
-        assert res_unauth.json()["authenticated"] is False
-
-        # Check authenticated
-        res_auth = await client.get(
-            "/api/auth/me",
-            headers={"Authorization": "Bearer kanban-session-user"},
-        )
-        assert res_auth.status_code == 200
-        assert res_auth.json()["authenticated"] is True
-        assert res_auth.json()["username"] == "user"
-
-        # Logout
         res_logout = await client.post("/api/auth/logout")
         assert res_logout.status_code == 200
         assert res_logout.json()["authenticated"] is False

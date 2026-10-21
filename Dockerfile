@@ -9,7 +9,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Backend runtime with Python and uv
-FROM ghcr.io/astral-sh/uv:latest AS uv_bin
+FROM ghcr.io/astral-sh/uv:0.13.4 AS uv_bin
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -20,13 +20,15 @@ COPY --from=uv_bin /uv /uvx /bin/
 # Install Claude Code CLI (used by the backend for AI calls)
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL https://claude.ai/install.sh | bash
+    && curl -fsSL https://claude.ai/install.sh | bash -s 2.1.306
 ENV PATH="/root/.local/bin:$PATH"
 
-# Copy backend dependencies and install
-COPY backend/pyproject.toml /app/backend/
+# Install locked backend dependencies (dev group excluded) into /app/backend/.venv
+COPY backend/pyproject.toml backend/uv.lock /app/backend/
 WORKDIR /app/backend
-RUN uv pip install --system -r pyproject.toml
+ENV UV_PYTHON_DOWNLOADS=never
+RUN uv sync --frozen --no-dev
+ENV PATH="/app/backend/.venv/bin:$PATH"
 
 # Copy backend source code
 COPY backend /app/backend

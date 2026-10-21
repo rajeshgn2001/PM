@@ -1,7 +1,7 @@
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -53,13 +53,6 @@ async def logout():
     return {"authenticated": False, "message": "Logged out successfully"}
 
 
-@app.get("/api/auth/me")
-async def get_current_user(authorization: str | None = Header(default=None)):
-    if authorization == "Bearer kanban-session-user":
-        return {"authenticated": True, "username": "user"}
-    return {"authenticated": False, "username": None}
-
-
 @app.get("/api/board", response_model=BoardData)
 async def fetch_board():
     board = get_board("user")
@@ -108,7 +101,9 @@ RULES FOR RESPONSES:
    - Return the COMPLETE modified BoardData object in "board_update".
    - Ensure every card referenced in column.cardIds exists in the cards dictionary.
    - For new cards, generate a unique id like "card-" + random alphanumeric.
-   - Preserve all existing cards and columns unless explicitly asked to modify them.
+   - Preserve all existing cards unless explicitly asked to modify them.
+   - The five columns are fixed: never add, remove, reorder, or change column ids. Columns may only be renamed.
+   - Every card must appear in exactly one column's cardIds.
    - Explain what change you made in "message".
 4. Do not include markdown formatting or backticks around the JSON; return raw JSON only.
 """
@@ -118,39 +113,21 @@ RULES FOR RESPONSES:
     ]
 
     try:
-        raw_response = await generate_structured_chat(
+        output = await generate_structured_chat(
             user_prompt=request.message,
             system_instruction=system_instruction,
             history=history_payload,
         )
-
-        message = raw_response.get("message", "Processed your request.")
-        board_update_raw = raw_response.get("board_update")
-
-        if board_update_raw:
-            try:
-                validated_board = BoardData.model_validate(board_update_raw)
-                save_board(validated_board.model_dump(), username="user")
-                return ChatResponse(
-                    message=message,
-                    board_update=validated_board,
-                    board_changed=True,
-                )
-            except Exception:
-                # If board update validation failed, don't corrupt the DB; return conversational message
-                return ChatResponse(
-                    message=message,
-                    board_update=None,
-                    board_changed=False,
-                )
-
-        return ChatResponse(
-            message=message,
-            board_update=None,
-            board_changed=False,
-        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+    if output.board_update:
+        save_board(output.board_update.model_dump(), username="user")
+    return ChatResponse(
+        message=output.message,
+        board_update=output.board_update,
+        board_changed=output.board_update is not None,
+    )
 
 
 if STATIC_DIR.exists():

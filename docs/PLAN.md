@@ -59,7 +59,7 @@ Build the Next.js frontend as a static export and serve it from the FastAPI back
 - [x] Configure `output: "export"` and `images: { unoptimized: true }` in `frontend/next.config.ts`.
 - [x] Update frontend build scripts to export static assets to `frontend/out`.
 - [x] Update `Dockerfile` to use a multi-stage build: Stage 1 builds the Next.js static export using Node 20; Stage 2 packages Python, FastAPI, and copies static files into FastAPI mount directory.
-- [x] Configure FastAPI in `backend/main.py` to mount and serve static files at `/` with SPA fallback to `index.html`.
+- [x] Configure FastAPI in `backend/main.py` to mount and serve the static export at `/` (`StaticFiles(html=True)`; single page, no SPA fallback needed).
 - [x] Add backend automated test ensuring static files (HTML, JS bundles, CSS) are served with HTTP 200.
 
 ### Testing & Verification
@@ -80,10 +80,10 @@ Gate the Kanban board behind an authentication flow. Users must sign in with har
 ### Checklist
 - [x] Create `LoginForm.tsx` component adhering to project color scheme (`#032147`, `#209dd7`, `#753991`).
 - [x] Add authentication state management in frontend (`frontend/src/lib/auth.ts`) handling login, logout, and credential validation against `user` / `password`.
-- [x] Store session state (e.g. cookie or localStorage) to persist login across page reloads.
+- [x] Store session state in sessionStorage to persist login across page reloads (cleared when the tab or browser closes).
 - [x] Add auth gate to `app/page.tsx`: unauthenticated users see `LoginForm`, authenticated users see `KanbanBoard`.
 - [x] Add a clean user profile / logout button to the `KanbanBoard` header.
-- [x] Create backend auth endpoints in FastAPI: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`.
+- [x] Create backend auth endpoints in FastAPI: `POST /api/auth/login`, `POST /api/auth/logout`. The frontend login calls the backend; the board and AI APIs are not token-protected (MVP).
 - [x] Write unit tests for `LoginForm`, auth helper functions, and backend auth routes.
 
 ### Testing & Verification
@@ -130,7 +130,7 @@ Implement the SQLite database access layer and FastAPI endpoints to create, read
 - [x] Implement database initialization in `backend/database.py` that creates `kanban.db` and required tables on startup if not present.
 - [x] Seed default user (`user` / `password`) and initial Kanban data (5 columns, 8 cards) on first database creation.
 - [x] Implement Pydantic models in `backend/models.py` for `Card`, `Column`, `BoardData`, and API payloads.
-- [x] Implement API endpoints in `backend/routers/board.py`:
+- [x] Implement API endpoints in `backend/main.py`:
   - `GET /api/board`: return the user's current board data.
   - `PUT /api/board`: validate and update the user's board data.
 - [x] Implement backend unit test suite using `pytest` and `httpx.AsyncClient` covering database initialization, seed data, board retrieval, and board updates.
@@ -156,7 +156,7 @@ Wire the frontend Kanban board to the backend REST API so that all board state (
 - [x] Implement API client functions in `frontend/src/lib/api.ts` for `fetchBoard()` and `saveBoard(data)`.
 - [x] Update `KanbanBoard.tsx` to load initial board data from `GET /api/board` on mount instead of using static `initialData`.
 - [x] Update board mutation handlers (`handleDragEnd`, `handleRenameColumn`, `handleAddCard`, `handleDeleteCard`) to persist changes via `PUT /api/board`.
-- [x] Implement optimistic UI updates with automatic rollback on network failure.
+- [x] Implement optimistic UI updates; a failed save shows a "Sync error" status (no automatic rollback).
 - [x] Display subtle loading and saving status indicators in the board header.
 - [x] Update frontend unit tests to mock API client calls.
 - [x] Update Playwright E2E tests to verify card creation and dragging persist after page reload.

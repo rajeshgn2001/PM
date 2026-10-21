@@ -1,32 +1,23 @@
 # Backend Overview
 
-This document describes the Python backend application in `backend/`.
+Python 3.12 FastAPI app in `backend/`, packaged by the root `Dockerfile` and run with Uvicorn on port 8000.
 
-## Architecture & Technology Stack
+## Files
 
-- **Language**: Python 3.12+
-- **Framework**: FastAPI
-- **ASGI Server**: Uvicorn
-- **Package Manager**: `uv`
-- **Configuration**: `pyproject.toml`
-- **Data Validation**: Pydantic v2
-
-## Directory Structure
-
-```
-backend/
-├── main.py          # FastAPI application entrypoint, route handlers, and static files mount
-├── pyproject.toml   # Project metadata and dependencies for uv
-├── static/          # Static files served at /
-│   └── index.html   # Initial HTML scaffolding demonstration
-└── AGENTS.md        # Architecture and developer documentation
-```
+- `main.py`: routes, AI system prompt, and the static mount of the Next.js export at `/` (mounted last, after `/api/*`).
+- `models.py`: Pydantic models. `BoardData` validates integrity (fixed five column IDs in order, every card in exactly one column, keys match card IDs).
+- `database.py`: raw `sqlite3`. `init_db()` creates tables and seeds the `user` account and default board. DB path from `DB_PATH` (Docker: `/data/kanban.db` on the `kanban-data` volume), else `backend/kanban.db`.
+- `ai.py`: calls Claude via the Claude Code CLI (`claude -p`, no tools, JSON schema output) with the user's subscription token `CLAUDE_CODE_OAUTH_TOKEN`. 120s timeout; the subprocess is killed on timeout or cancellation.
+- `tests/`: pytest. `conftest.py` gives each test its own temp DB. AI tests stub `ai.run_claude`; `test_live_claude_completion` calls the real CLI when installed.
 
 ## Endpoints
 
-- `GET /`: Serves the static site (`index.html`) mounted from `backend/static/`.
-- `GET /api/health`: Health check endpoint returning `{"status": "ok", "message": "Backend healthy"}`.
+- `GET /api/health`
+- `POST /api/auth/login` (hardcoded `user` / `password`), `POST /api/auth/logout`
+- `GET /api/board`, `PUT /api/board` (whole board; 422 if invalid)
+- `POST /api/ai/chat` (message + history; saves and returns `board_update` when the AI changes the board; 500 with a readable `detail` on AI failure or invalid board)
+- `POST /api/ai/test` (2+2 connectivity check)
 
-## Containerization
+## Dependencies
 
-The backend is packaged into a Docker container defined by the root `Dockerfile` using Python 3.12-slim and Astral `uv`. Dependencies are installed in the container using `uv pip install --system -r pyproject.toml`.
+Managed with uv: `pyproject.toml` + `uv.lock`. Runtime deps only in the image (`uv sync --frozen --no-dev`); test tools are in the `dev` dependency group.

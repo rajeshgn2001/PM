@@ -7,7 +7,7 @@ This document defines the SQLite database design for the Project Management MVP 
 ## 1. Overview & Storage Strategy
 
 - **Database Engine**: SQLite 3
-- **File Location**: `backend/kanban.db` (auto-created on startup if it does not exist)
+- **File Location**: `DB_PATH` if set, else `backend/kanban.db`. In Docker, `DB_PATH=/data/kanban.db` on the `kanban-data` named volume, so the board survives restarts. Created on startup if missing.
 - **Design Pattern**: Hybrid Relational + Document storage. User identity and board metadata are relational; Kanban board contents (columns, cards, and ordering) are stored as JSON in a single `data` column.
 - **Rationale**:
   - High read/write throughput without complex multi-table joins or cascading updates when moving cards.
@@ -37,7 +37,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
 #### Columns
 - `id`: Unique integer identifier.
 - `username`: Unique username (e.g., `user`).
-- `password_hash`: Password hash or credentials representation (for MVP, seeded with `password`).
+- `password_hash`: For the MVP this stores the plaintext seed value `password` and is not read; login is checked against hardcoded credentials in `backend/main.py`.
 - `created_at`: Account creation timestamp.
 
 ---
@@ -140,9 +140,18 @@ class BoardData(BaseModel):
 
 ---
 
+### Integrity rules (enforced by `BoardData` validation)
+
+Every write (`PUT /api/board` and AI updates) is rejected with 422 (or a 500 for AI replies) unless:
+- The columns are exactly `col-backlog`, `col-discovery`, `col-progress`, `col-review`, `col-done`, in that order (titles may change).
+- Every card appears in exactly one column's `cardIds`, and every `cardIds` entry exists in `cards`.
+- Each `cards` key equals that card's `id`.
+
+---
+
 ## 4. Initialization & Seed Data
 
-On application startup, a lifecycle hook checks if `kanban.db` exists. If not:
+On application startup, `init_db()` runs `CREATE TABLE IF NOT EXISTS` and seeds only what is missing:
 1. Executes `CREATE TABLE` and `CREATE INDEX` queries.
 2. Inserts default user:
    - `username`: `user`

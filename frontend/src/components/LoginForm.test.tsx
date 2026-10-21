@@ -1,11 +1,13 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginForm } from "./LoginForm";
+import { mockLoginFetch } from "@/test/fetchMock";
 
 describe("LoginForm", () => {
   beforeEach(() => {
-    localStorage.clear();
+    sessionStorage.clear();
+    mockLoginFetch();
   });
 
   it("renders username and password input fields", () => {
@@ -21,7 +23,7 @@ describe("LoginForm", () => {
     await userEvent.type(screen.getByLabelText(/password/i), "wrong");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Invalid username or password");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid username or password");
   });
 
   it("invokes onLoginSuccess on valid credentials", async () => {
@@ -31,6 +33,6 @@ describe("LoginForm", () => {
     await userEvent.type(screen.getByLabelText(/password/i), "password");
     await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    expect(handleSuccess).toHaveBeenCalledWith("user");
+    await waitFor(() => expect(handleSuccess).toHaveBeenCalledWith("user"));
   });
 });

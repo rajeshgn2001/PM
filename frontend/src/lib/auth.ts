@@ -11,8 +11,8 @@ export const getStoredAuth = (): AuthState => {
   if (typeof window === "undefined") {
     return { isAuthenticated: false, username: null, token: null };
   }
-  const token = localStorage.getItem(TOKEN_KEY);
-  const username = localStorage.getItem(USER_KEY);
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  const username = sessionStorage.getItem(USER_KEY);
   if (token && username) {
     return { isAuthenticated: true, username, token };
   }
@@ -23,33 +23,29 @@ export const loginUser = async (
   username: string,
   password: string
 ): Promise<{ success: boolean; error?: string }> => {
-  // Hardcoded MVP check
-  if (username.trim() === "user" && password === "password") {
-    const token = "kanban-session-user";
-    if (typeof window !== "undefined") {
-      localStorage.setItem(TOKEN_KEY, token);
-      localStorage.setItem(USER_KEY, "user");
-    }
-    // Try notifying backend if available
-    try {
-      await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
-    } catch {
-      // Allow offline or static client login
-    }
-    return { success: true };
+  let response: Response;
+  try {
+    response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: username.trim(), password }),
+    });
+  } catch {
+    return { success: false, error: "Unable to reach the server" };
   }
-
-  return { success: false, error: "Invalid username or password" };
+  if (!response.ok) {
+    return { success: false, error: "Invalid username or password" };
+  }
+  const data: { username: string; token: string } = await response.json();
+  sessionStorage.setItem(TOKEN_KEY, data.token);
+  sessionStorage.setItem(USER_KEY, data.username);
+  return { success: true };
 };
 
 export const logoutUser = async (): Promise<void> => {
   if (typeof window !== "undefined") {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
   }
   try {
     await fetch("/api/auth/logout", { method: "POST" });

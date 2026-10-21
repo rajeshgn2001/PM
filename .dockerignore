@@ -9,3 +9,6 @@ __pycache__
 .pytest_cache
 .coverage
 test-results
+**/.venv
+**/*.db
+.env

@@ -1,11 +1,14 @@
 import asyncio
 import json
 
+from pydantic import ValidationError
+
 from models import ChatOutput
 
 # Calls Claude through the Claude Code CLI in print mode, authenticated with the
 # user's Claude subscription (CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`).
 BASE_ARGS = ["claude", "-p", "--output-format", "json", "--tools", "", "--no-session-persistence"]
+TIMEOUT_SECONDS = 120
 
 
 async def run_claude(prompt: str, system_prompt: str, json_schema: dict | None = None) -> dict:
@@ -18,7 +21,14 @@ async def run_claude(prompt: str, system_prompt: str, json_schema: dict | None =
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate(prompt.encode())
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(prompt.encode()), TIMEOUT_SECONDS)
+    except TimeoutError:
+        proc.kill()
+        raise RuntimeError(f"AI request timed out after {TIMEOUT_SECONDS}s")
+    except asyncio.CancelledError:
+        proc.kill()
+        raise
     if proc.returncode != 0:
         raise RuntimeError(f"claude exited {proc.returncode}: {(stdout or stderr).decode()[:500]}")
     result = json.loads(stdout)
@@ -45,10 +55,13 @@ async def generate_structured_chat(
     user_prompt: str,
     system_instruction: str,
     history: list[dict] | None = None,
-) -> dict:
+) -> ChatOutput:
     result = await run_claude(
         format_conversation(history, user_prompt),
         system_instruction,
         ChatOutput.model_json_schema(),
     )
-    return ChatOutput.model_validate(result["structured_output"]).model_dump()
+    try:
+        return ChatOutput.model_validate(result["structured_output"])
+    except ValidationError as e:
+        raise RuntimeError(f"AI returned an invalid board: {e.errors()[0]['msg']}")

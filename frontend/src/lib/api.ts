@@ -46,7 +46,8 @@ export const sendChatMessage = async (
     body: JSON.stringify({ message, history }),
   });
   if (!response.ok) {
-    throw new Error(`AI chat error: ${response.statusText}`);
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail ?? response.statusText);
   }
   return response.json();
 };

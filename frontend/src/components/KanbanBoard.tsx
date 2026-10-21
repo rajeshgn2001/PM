@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -14,7 +14,7 @@ import {
 import { KanbanColumn } from "@/components/KanbanColumn";
 import { KanbanCardPreview } from "@/components/KanbanCardPreview";
 import { AIChatSidebar } from "@/components/AIChatSidebar";
-import { createId, initialData, moveCard, type BoardData } from "@/lib/kanban";
+import { createId, moveCard, type BoardData } from "@/lib/kanban";
 import { fetchBoard, saveBoard } from "@/lib/api";
 
 type KanbanBoardProps = {
@@ -23,26 +23,21 @@ type KanbanBoardProps = {
 };
 
 export const KanbanBoard = ({ onLogout, username = "user" }: KanbanBoardProps = {}) => {
-  const [board, setBoard] = useState<BoardData>(() => initialData);
+  const [board, setBoard] = useState<BoardData | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [activeCardId, setActiveCardId] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<"synced" | "saving" | "error">("synced");
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isAiBusy, setIsAiBusy] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadBoard = () =>
     fetchBoard()
-      .then((data) => {
-        if (isMounted && data && data.columns && data.cards) {
-          setBoard(data);
-        }
-      })
-      .catch(() => {
-        // Fall back gracefully
-      });
-    return () => {
-      isMounted = false;
-    };
+      .then(setBoard)
+      .catch(() => setLoadError(true));
+
+  useEffect(() => {
+    loadBoard();
   }, []);
 
   const sensors = useSensors(
@@ -50,8 +45,6 @@ export const KanbanBoard = ({ onLogout, username = "user" }: KanbanBoardProps = 
       activationConstraint: { distance: 6 },
     })
   );
-
-  const cardsById = useMemo(() => board.cards, [board.cards]);
 
   const queueSave = (newBoard: BoardData) => {
     if (saveTimeoutRef.current) {
@@ -68,6 +61,35 @@ export const KanbanBoard = ({ onLogout, username = "user" }: KanbanBoardProps = 
     }, 150);
   };
 
+  if (!board) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 text-sm text-[var(--gray-text)]">
+        {loadError ? (
+          <>
+            <p>Could not load the board.</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoadError(false);
+                loadBoard();
+              }}
+              className="rounded-full bg-[var(--secondary-purple)] px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white"
+            >
+              Retry
+            </button>
+          </>
+        ) : (
+          <p>Loading board...</p>
+        )}
+      </main>
+    );
+  }
+
+  const updateBoard = (updated: BoardData) => {
+    setBoard(updated);
+    queueSave(updated);
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveCardId(event.active.id as string);
   };
@@ -80,71 +102,59 @@ export const KanbanBoard = ({ onLogout, username = "user" }: KanbanBoardProps = 
       return;
     }
 
-    setBoard((prev) => {
-      const updated = {
-        ...prev,
-        columns: moveCard(prev.columns, active.id as string, over.id as string),
-      };
-      queueSave(updated);
-      return updated;
+    updateBoard({
+      ...board,
+      columns: moveCard(board.columns, active.id as string, over.id as string),
     });
   };
 
   const handleRenameColumn = (columnId: string, title: string) => {
-    setBoard((prev) => {
-      const updated = {
-        ...prev,
-        columns: prev.columns.map((column) =>
-          column.id === columnId ? { ...column, title } : column
-        ),
-      };
-      queueSave(updated);
-      return updated;
+    updateBoard({
+      ...board,
+      columns: board.columns.map((column) =>
+        column.id === columnId ? { ...column, title } : column
+      ),
     });
   };
 
   const handleAddCard = (columnId: string, title: string, details: string) => {
     const id = createId("card");
-    setBoard((prev) => {
-      const updated = {
-        ...prev,
-        cards: {
-          ...prev.cards,
-          [id]: { id, title, details: details || "No details yet." },
-        },
-        columns: prev.columns.map((column) =>
-          column.id === columnId
-            ? { ...column, cardIds: [...column.cardIds, id] }
-            : column
-        ),
-      };
-      queueSave(updated);
-      return updated;
+    updateBoard({
+      ...board,
+      cards: {
+        ...board.cards,
+        [id]: { id, title, details: details || "No details yet." },
+      },
+      columns: board.columns.map((column) =>
+        column.id === columnId
+          ? { ...column, cardIds: [...column.cardIds, id] }
+          : column
+      ),
+    });
+  };
+
+  const handleUpdateCard = (cardId: string, title: string, details: string) => {
+    updateBoard({
+      ...board,
+      cards: { ...board.cards, [cardId]: { id: cardId, title, details } },
     });
   };
 
   const handleDeleteCard = (columnId: string, cardId: string) => {
-    setBoard((prev) => {
-      const updated = {
-        ...prev,
-        cards: Object.fromEntries(
-          Object.entries(prev.cards).filter(([id]) => id !== cardId)
-        ),
-        columns: prev.columns.map((column) =>
-          column.id === columnId
-            ? {
-                ...column,
-                cardIds: column.cardIds.filter((id) => id !== cardId),
-              }
-            : column
-        ),
-      };
-      queueSave(updated);
-      return updated;
+    updateBoard({
+      ...board,
+      cards: Object.fromEntries(
+        Object.entries(board.cards).filter(([id]) => id !== cardId)
+      ),
+      columns: board.columns.map((column) =>
+        column.id === columnId
+          ? { ...column, cardIds: column.cardIds.filter((id) => id !== cardId) }
+          : column
+      ),
     });
   };
 
-  const activeCard = activeCardId ? cardsById[activeCardId] : null;
+  const activeCard = activeCardId ? board.cards[activeCardId] : null;
 
   return (
     <div className="relative overflow-hidden">
@@ -187,6 +197,12 @@ export const KanbanBoard = ({ onLogout, username = "user" }: KanbanBoardProps = 
                 AI Assistant
               </button>
 
+              {isAiBusy && (
+                <div className="flex items-center gap-2 rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-3 py-4 text-xs font-medium text-[var(--primary-blue)]">
+                  <span className="h-2 w-2 rounded-full bg-[var(--primary-blue)] animate-pulse" />
+                  AI is updating the board...
+                </div>
+              )}
               {syncStatus === "saving" && (
                 <div className="flex items-center gap-2 rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] px-3 py-4 text-xs font-medium text-[var(--accent-yellow)]">
                   <span className="h-2 w-2 rounded-full bg-[var(--accent-yellow)] animate-pulse" />
@@ -236,7 +252,10 @@ export const KanbanBoard = ({ onLogout, username = "user" }: KanbanBoardProps = 
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <section className="grid gap-6 lg:grid-cols-5">
+          <section
+            inert={isAiBusy}
+            className={`grid gap-6 lg:grid-cols-5 ${isAiBusy ? "opacity-60" : ""}`}
+          >
             {board.columns.map((column) => (
               <KanbanColumn
                 key={column.id}
@@ -244,6 +263,7 @@ export const KanbanBoard = ({ onLogout, username = "user" }: KanbanBoardProps = 
                 cards={column.cardIds.map((cardId) => board.cards[cardId])}
                 onRename={handleRenameColumn}
                 onAddCard={handleAddCard}
+                onUpdateCard={handleUpdateCard}
                 onDeleteCard={handleDeleteCard}
               />
             ))}
@@ -262,6 +282,7 @@ export const KanbanBoard = ({ onLogout, username = "user" }: KanbanBoardProps = 
       <AIChatSidebar
         isOpen={isChatOpen}
         onClose={() => setIsChatOpen(false)}
+        onBusyChange={setIsAiBusy}
         onBoardUpdate={(updatedBoard) => {
           setBoard(updatedBoard);
           setSyncStatus("synced");

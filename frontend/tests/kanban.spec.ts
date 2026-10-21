@@ -69,6 +69,21 @@ test("persists added cards across page reload", async ({ page }) => {
   await expect(firstColumn.getByText(cardTitle)).toBeVisible();
 });
 
+test("edits a card and persists the change", async ({ page }) => {
+  await login(page);
+  const card = page.getByTestId("card-card-2");
+  await card.getByRole("button", { name: /^edit /i }).click();
+  const newTitle = `Edited ${Date.now()}`;
+  await card.getByLabel("Edit card title").fill(newTitle);
+  await card.getByLabel("Edit card details").fill("Edited via e2e.");
+  await card.getByRole("button", { name: /^save$/i }).click();
+  await expect(card.getByText(newTitle)).toBeVisible();
+
+  await page.waitForTimeout(600);
+  await page.reload();
+  await expect(page.getByTestId("card-card-2").getByText(newTitle)).toBeVisible();
+});
+
 test("moves a card between columns", async ({ page }) => {
   await login(page);
   const card = page.getByTestId("card-card-1");

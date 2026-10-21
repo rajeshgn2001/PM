@@ -1,20 +1,8 @@
-import os
-import tempfile
+import copy
 import pytest
 from httpx import ASGITransport, AsyncClient
-
-# Use isolated temp database for tests
-temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-os.environ["DB_PATH"] = temp_db.name
-
-from database import init_db, get_board, save_board, INITIAL_BOARD_DATA
+from database import get_board, INITIAL_BOARD_DATA
 from main import app
-
-
-@pytest.fixture(autouse=True)
-def setup_test_database():
-    init_db()
-    save_board(INITIAL_BOARD_DATA, username="user")
 
 
 @pytest.mark.asyncio
@@ -79,3 +67,25 @@ async def test_put_board_invalid_schema():
         bad_payload = {"invalid_key": 123}
         response = await client.put("/api/board", json=bad_payload)
         assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "corrupt",
+    [
+        lambda b: b["columns"][0]["cardIds"].append("card-missing"),
+        lambda b: b["columns"][1]["cardIds"].append("card-1"),
+        lambda b: b["columns"][0]["cardIds"].remove("card-1"),
+        lambda b: b["columns"].pop(),
+        lambda b: b["columns"].reverse(),
+    ],
+    ids=["dangling-card-id", "duplicate-card", "orphan-card", "missing-column", "reordered-columns"],
+)
+@pytest.mark.asyncio
+async def test_put_board_rejects_inconsistent_board(corrupt):
+    board = copy.deepcopy(INITIAL_BOARD_DATA)
+    corrupt(board)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.put("/api/board", json=board)
+    assert response.status_code == 422
+    assert get_board("user") == INITIAL_BOARD_DATA

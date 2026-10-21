@@ -17,46 +17,31 @@ This document describes the existing frontend codebase in `frontend/`.
 ```
 frontend/
 ├── src/
-│   ├── app/
-│   │   ├── globals.css      # CSS variables and base Tailwind styling
-│   │   ├── layout.tsx       # Root HTML shell and font definitions
-│   │   └── page.tsx         # Root page rendering <KanbanBoard />
+│   ├── app/            # layout.tsx, page.tsx (login gate), globals.css
 │   ├── components/
-│   │   ├── KanbanBoard.tsx  # Main board orchestrator, state holder, and DnD context
-│   │   ├── KanbanColumn.tsx # Droppable column component with editable title and card list
-│   │   ├── KanbanCard.tsx   # Draggable sortable card item with removal button
-│   │   ├── KanbanCardPreview.tsx # Drag overlay preview rendered while dragging
-│   │   ├── NewCardForm.tsx  # Form component to append cards to a column
-│   │   └── KanbanBoard.test.tsx # Vitest component tests
+│   │   ├── KanbanBoard.tsx       # loads/saves board, DnD context, AI lock, edit/add/delete handlers
+│   │   ├── KanbanColumn.tsx      # droppable column with editable title
+│   │   ├── KanbanCard.tsx        # draggable card with inline edit and remove
+│   │   ├── KanbanCardPreview.tsx # drag overlay
+│   │   ├── NewCardForm.tsx       # add-card form
+│   │   ├── LoginForm.tsx         # sign-in form
+│   │   └── AIChatSidebar.tsx     # AI chat; reports busy state; shows server error detail
 │   ├── lib/
-│   │   ├── kanban.ts        # Data types, initial demo data, and pure reordering logic
-│   │   └── kanban.test.ts   # Unit tests for reordering logic
-│   └── test/
-│       └── setup.ts         # Jest DOM matchers setup for Vitest
-├── tests/
-│   └── kanban.spec.ts       # Playwright end-to-end tests
-├── package.json
-├── next.config.ts
-├── tsconfig.json
-├── vitest.config.ts
-└── playwright.config.ts
+│   │   ├── kanban.ts   # types, moveCard (pure), createId
+│   │   ├── api.ts      # fetchBoard, saveBoard, sendChatMessage
+│   │   └── auth.ts     # login via POST /api/auth/login, token in sessionStorage
+│   └── test/           # Vitest setup and fetch mock
+└── tests/kanban.spec.ts  # Playwright E2E
 ```
 
 ## Data Model (`src/lib/kanban.ts`)
 
-- `Card`:
-  - `id`: unique card identifier string (`card-xxx`)
-  - `title`: short title string
-  - `details`: descriptive text string
-- `Column`:
-  - `id`: unique column identifier string (`col-xxx`)
-  - `title`: column header title string
-  - `cardIds`: string array maintaining the ordered card IDs for that column
-- `BoardData`:
-  - `columns`: array of `Column` objects
-  - `cards`: normalized map `Record<string, Card>`
-- `moveCard(columns, activeId, overId)`: Pure function computing the new column and card ordering when dragging within or between columns.
-- `initialData`: Seed data containing 5 standard columns (Backlog, Discovery, In Progress, Review, Done) and 8 cards.
+- `Card`: `id`, `title`, `details`
+- `Column`: `id`, `title`, `cardIds` (ordered)
+- `BoardData`: `columns`, `cards` (map of id to card)
+- `moveCard(columns, activeId, overId)`: pure reorder/move logic used by drag and drop.
+
+The backend enforces board integrity (see `docs/DATABASE.md`).
 
 ## UI Design Tokens & Theme (`src/app/globals.css`)
 
@@ -71,23 +56,13 @@ Colors mapped to the project guidelines:
 
 ## Current Functionality
 
-- Single board view with 5 columns.
-- Drag-and-drop card reordering within a column and moving between columns using `@dnd-kit`.
-- In-place column title editing.
-- Adding cards to any column with title and description.
-- Deleting cards from a column.
-- Note: Current state is in-memory React state (`useState`) without persistence.
+- Sign in against the backend; session kept in sessionStorage (survives reloads, cleared when the tab or browser closes).
+- Board loads from `GET /api/board`; a loading state, or an error with Retry, is shown until it loads (no demo data fallback).
+- Drag and drop, column rename, add, inline edit, and delete; each change is saved with a debounced `PUT /api/board`. A failed save shows "Sync error".
+- AI sidebar: while a request is in flight the board is `inert` (locked) so the AI's full-board reply cannot overwrite concurrent edits.
 
 ## Testing & Verification Commands
 
-- `npm run test` or `npm run test:unit`: Executes Vitest unit tests in `src/`.
-- `npm run test:e2e`: Executes Playwright end-to-end tests.
-- `npm run lint`: Runs ESLint checks.
-- `npm run build`: Generates Next.js build.
-
-## Roadmap for Integration
-
-1. **Static Export**: Configure `output: "export"` in `next.config.ts` so FastAPI can serve the generated static assets from `/`.
-2. **Authentication Flow**: Add login gate checking credentials (`user` / `password`) and session management.
-3. **Backend Persistence**: Replace in-memory `initialData` with REST API calls (`GET /api/board`, `PUT /api/board`) connected to the FastAPI backend.
-4. **AI Sidebar Integration**: Add chat drawer component connected to the backend AI endpoint for conversational updates to the board.
+- `npm run test`: Vitest unit tests in `src/`.
+- `npm run test:e2e`: Playwright E2E against a running app (see root `CLAUDE.md` for running against a throwaway container).
+- `npm run lint`, `npm run build` (static export to `out/`).

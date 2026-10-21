@@ -8,6 +8,7 @@ type AIChatSidebarProps = {
   isOpen: boolean;
   onClose: () => void;
   onBoardUpdate: (updatedBoard: BoardData) => void;
+  onBusyChange?: (isBusy: boolean) => void;
 };
 
 const INITIAL_MESSAGES: ChatMessageItem[] = [
@@ -28,6 +29,7 @@ export const AIChatSidebar = ({
   isOpen,
   onClose,
   onBoardUpdate,
+  onBusyChange,
 }: AIChatSidebarProps) => {
   const [messages, setMessages] = useState<ChatMessageItem[]>(INITIAL_MESSAGES);
   const [input, setInput] = useState("");
@@ -53,6 +55,7 @@ export const AIChatSidebar = ({
     setMessages(updatedMessages);
     setInput("");
     setIsLoading(true);
+    onBusyChange?.(true);
 
     try {
       const historyPayload = messages.map((msg) => ({
@@ -74,17 +77,17 @@ export const AIChatSidebar = ({
       if (res.board_update && res.board_changed) {
         onBoardUpdate(res.board_update);
       }
-    } catch {
+    } catch (error) {
       setMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content:
-            "Sorry, I encountered an issue contacting the AI assistant. Please try again.",
+          content: `Sorry, the AI request failed: ${(error as Error).message}`,
         },
       ]);
     } finally {
       setIsLoading(false);
+      onBusyChange?.(false);
     }
   };
 

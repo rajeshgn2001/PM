@@ -57,4 +57,28 @@ describe("AIChatSidebar", () => {
     expect(handleBoardUpdate).toHaveBeenCalledWith(fakeBoard);
     expect(screen.getByText("Board updated")).toBeInTheDocument();
   });
+
+  it("reports busy state and shows the server error detail", async () => {
+    const handleBusy = vi.fn();
+    vi.spyOn(api, "sendChatMessage").mockRejectedValueOnce(
+      new Error("AI request timed out after 120s")
+    );
+
+    render(
+      <AIChatSidebar
+        isOpen={true}
+        onClose={vi.fn()}
+        onBoardUpdate={vi.fn()}
+        onBusyChange={handleBusy}
+      />
+    );
+
+    await userEvent.type(screen.getByPlaceholderText(/ask ai to add/i), "Hello");
+    await userEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    expect(
+      await screen.findByText(/AI request failed: AI request timed out after 120s/)
+    ).toBeInTheDocument();
+    expect(handleBusy.mock.calls).toEqual([[true], [false]]);
+  });
 });
