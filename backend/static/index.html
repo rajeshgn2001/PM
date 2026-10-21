@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kanban MVP - Scaffolding</title>
+  <style>
+    :root {
+      --accent-yellow: #ecad0a;
+      --primary-blue: #209dd7;
+      --secondary-purple: #753991;
+      --navy-dark: #032147;
+      --gray-text: #888888;
+      --surface: #f7f8fb;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--surface);
+      color: var(--navy-dark);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .card {
+      background: #ffffff;
+      padding: 2.5rem;
+      border-radius: 24px;
+      box-shadow: 0 18px 40px rgba(3, 33, 71, 0.08);
+      max-width: 520px;
+      width: 90%;
+      border-top: 4px solid var(--accent-yellow);
+    }
+    h1 {
+      margin: 0 0 0.5rem 0;
+      font-size: 1.8rem;
+      color: var(--navy-dark);
+    }
+    p {
+      color: var(--gray-text);
+      line-height: 1.5;
+    }
+    .status-box {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid rgba(3, 33, 71, 0.08);
+      font-family: monospace;
+      font-size: 0.9rem;
+      color: var(--primary-blue);
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 1.5rem;
+      padding: 0.6rem 1.4rem;
+      background: var(--secondary-purple);
+      color: #ffffff;
+      text-decoration: none;
+      border: none;
+      border-radius: 9999px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Kanban App - Scaffolding</h1>
+    <p>Static HTML served from FastAPI in Docker.</p>
+    <div id="api-status" class="status-box">Testing API call to /api/health...</div>
+    <button class="btn" onclick="checkApi()">Re-check API</button>
+  </div>
+
+  <script>
+    async function checkApi() {
+      const el = document.getElementById('api-status');
+      el.textContent = 'Calling /api/health...';
+      try {
+        const res = await fetch('/api/health');
+        const data = await res.json();
+        el.textContent = 'API Response: ' + JSON.stringify(data);
+      } catch (err) {
+        el.textContent = 'API call failed: ' + err.message;
+      }
+    }
+    checkApi();
+  </script>
+</body>
+</html>
