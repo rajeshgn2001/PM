@@ -28,6 +28,11 @@ class ChatRequest(BaseModel):
     history: list[ChatMessage] = []
 
 
+class ChatOutput(BaseModel):
+    message: str
+    board_update: BoardData | None = None
+
+
 class ChatResponse(BaseModel):
     message: str
     board_update: BoardData | None = None

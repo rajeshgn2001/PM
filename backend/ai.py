@@ -1,85 +1,44 @@
+import asyncio
 import json
-import os
-from pathlib import Path
-import re
-import httpx
 
-CANDIDATE_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
-    "gemini-flash-latest",
-]
-API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+from models import ChatOutput
+
+# Calls Claude through the Claude Code CLI in print mode, authenticated with the
+# user's Claude subscription (CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`).
+BASE_ARGS = ["claude", "-p", "--output-format", "json", "--tools", "", "--no-session-persistence"]
 
 
-def parse_json_response(raw_text: str) -> dict:
-    cleaned = raw_text.strip()
-    if cleaned.startswith("```json"):
-        cleaned = cleaned[7:]
-    elif cleaned.startswith("```"):
-        cleaned = cleaned[3:]
-    if cleaned.endswith("```"):
-        cleaned = cleaned[:-3]
-    cleaned = cleaned.strip()
+async def run_claude(prompt: str, system_prompt: str, json_schema: dict | None = None) -> dict:
+    args = [*BASE_ARGS, "--system-prompt", system_prompt]
+    if json_schema:
+        args += ["--json-schema", json.dumps(json_schema)]
+    proc = await asyncio.create_subprocess_exec(
+        *args,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate(prompt.encode())
+    if proc.returncode != 0:
+        raise RuntimeError(f"claude exited {proc.returncode}: {(stdout or stderr).decode()[:500]}")
+    result = json.loads(stdout)
+    if result.get("is_error"):
+        raise RuntimeError(f"claude error: {result.get('result')}")
+    return result
 
-    try:
-        return json.loads(cleaned)
-    except Exception:
-        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        raise
 
-
-def get_api_key() -> str:
-    key = os.getenv("GEMINI_API_KEY")
-    if not key:
-        env_file = Path(__file__).resolve().parent.parent / ".env"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                if line.startswith("GEMINI_API_KEY="):
-                    key = line.split("=", 1)[1].strip().strip('"').strip("'")
-                    break
-    return key or ""
+def format_conversation(history: list[dict] | None, user_prompt: str) -> str:
+    lines = [
+        f"{'User' if item['role'] == 'user' else 'Assistant'}: {item['content']}"
+        for item in history or []
+    ]
+    lines.append(f"User: {user_prompt}")
+    return "Conversation so far:\n\n" + "\n\n".join(lines) + "\n\nRespond to the last user message."
 
 
 async def generate_simple_completion(prompt: str) -> str:
-    key = get_api_key()
-    if not key:
-        raise ValueError("GEMINI_API_KEY not configured")
-
-    payload = {
-        "contents": [
-            {
-                "parts": [{"text": prompt}]
-            }
-        ]
-    }
-
-    last_err = None
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        for model in CANDIDATE_MODELS:
-            url = f"{API_BASE_URL}/models/{model}:generateContent?key={key}"
-            try:
-                response = await client.post(url, json=payload)
-                if response.status_code == 200:
-                    data = response.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        for part in parts:
-                            text = part.get("text")
-                            if text:
-                                return text.strip()
-                last_err = Exception(f"HTTP {response.status_code}: {response.text}")
-            except Exception as e:
-                last_err = e
-                continue
-
-    if last_err:
-        raise last_err
-    return ""
+    result = await run_claude(prompt, "You are a helpful assistant.")
+    return result["result"].strip()
 
 
 async def generate_structured_chat(
@@ -87,55 +46,9 @@ async def generate_structured_chat(
     system_instruction: str,
     history: list[dict] | None = None,
 ) -> dict:
-    key = get_api_key()
-    if not key:
-        raise ValueError("GEMINI_API_KEY not configured")
-
-    contents = []
-    if history:
-        for item in history:
-            role = "user" if item.get("role") == "user" else "model"
-            contents.append({"role": role, "parts": [{"text": item.get("content", "")}]})
-
-    contents.append({"role": "user", "parts": [{"text": user_prompt}]})
-
-    payload = {
-        "systemInstruction": {
-            "parts": [{"text": system_instruction}]
-        },
-        "contents": contents,
-        "generationConfig": {
-            "responseMimeType": "application/json",
-        },
-    }
-
-    last_err = None
-    fallback_text = None
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        for model in CANDIDATE_MODELS:
-            url = f"{API_BASE_URL}/models/{model}:generateContent?key={key}"
-            try:
-                response = await client.post(url, json=payload)
-                if response.status_code == 200:
-                    data = response.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        for part in parts:
-                            text = part.get("text")
-                            if text:
-                                fallback_text = text.strip()
-                                try:
-                                    return parse_json_response(fallback_text)
-                                except Exception:
-                                    continue
-                last_err = Exception(f"HTTP {response.status_code}: {response.text}")
-            except Exception as e:
-                last_err = e
-                continue
-
-    if fallback_text:
-        return {"message": fallback_text, "board_update": None}
-    if last_err:
-        raise last_err
-    return {"message": "No response generated", "board_update": None}
+    result = await run_claude(
+        format_conversation(history, user_prompt),
+        system_instruction,
+        ChatOutput.model_json_schema(),
+    )
+    return ChatOutput.model_validate(result["structured_output"]).model_dump()

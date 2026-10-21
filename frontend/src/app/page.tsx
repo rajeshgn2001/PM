@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { KanbanBoard } from "@/components/KanbanBoard";
 import { LoginForm } from "@/components/LoginForm";
 import { getStoredAuth, logoutUser } from "@/lib/auth";
@@ -18,14 +18,6 @@ export default function Home() {
     }
     return "user";
   });
-
-  useEffect(() => {
-    const auth = getStoredAuth();
-    setIsAuthenticated(auth.isAuthenticated);
-    if (auth.username) {
-      setUsername(auth.username);
-    }
-  }, []);
 
   const handleLoginSuccess = (user: string) => {
     setUsername(user);

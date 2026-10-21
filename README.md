@@ -1,6 +1,6 @@
 # Project Management MVP
 
-A containerized Kanban web application with real-time AI assistance powered by Gemini.
+A containerized Kanban web application with real-time AI assistance powered by Claude.
 
 ## Requirements
 
@@ -33,6 +33,13 @@ PowerShell:
 
 Once running, access the web app at: http://localhost:8000
 
+## AI Setup
+
+Run `claude setup-token` and add the token to `.env` in the project root:
+```
+CLAUDE_CODE_OAUTH_TOKEN=<token>
+```
+
 ## Sign In Credentials
 
 - Username: `user`
@@ -43,5 +50,5 @@ Once running, access the web app at: http://localhost:8000
 - Frontend: Next.js static export
 - Backend: Python FastAPI runtime using `uv`
 - Database: SQLite (`kanban.db`)
-- AI: Google Gemini Structured Outputs (`gemini-3.8-flash` with resilient fallbacks)
+- AI: Claude via the Claude Code CLI (`claude -p`) using a Claude subscription, with JSON-schema structured output
 - Container: Multi-stage Docker build exposing port 8000

@@ -23,8 +23,8 @@ For the MVP, this will run locally (in a docker container)
 - Python FastAPI backend, including serving the static NextJS site at /
 - Everything packaged into a Docker container
 - Use "uv" as the package manager for python in the Docker container
-- Use OpenRouter for the AI calls. A GEMINI_API_KEY is in .env in the project root
-- Use `Gemini 3.8 Flash High` as the model
+- Use Claude for the AI calls via the Claude Code CLI (`claude -p`) authenticated with the user's Claude subscription. A CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`) is in .env in the project root
+- Use the subscription's default Claude model
 - Use SQLLite local database for the database, creating a new db if it doesn't exist
 - Start and Stop server scripts for Mac, PC, Linux in scripts/
 

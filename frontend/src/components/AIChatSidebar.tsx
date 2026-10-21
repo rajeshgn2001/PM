@@ -111,7 +111,7 @@ export const AIChatSidebar = ({
               AI Project Assistant
             </h2>
             <p className="text-xs text-[var(--gray-text)]">
-              Powered by Gemini
+              Powered by Claude
             </p>
           </div>
         </div>

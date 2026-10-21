@@ -181,8 +181,8 @@ Wire the frontend Kanban board to the backend REST API so that all board state (
 Integrate the AI client in the backend using the API key in `.env` and verify connectivity with a minimal "2+2" test prompt.
 
 ### Checklist
-- [x] Load environment configuration (`GEMINI_API_KEY` / `OPENROUTER_API_KEY`) in backend using `pydantic-settings` or `python-dotenv`.
-- [x] Implement AI service client in `backend/ai.py` configured with the specified model (`Gemini 3.8 Flash High` or Google Gemini equivalent).
+- [x] Pass `CLAUDE_CODE_OAUTH_TOKEN` from `.env` to the container (docker-compose `env_file`).
+- [x] Implement AI service client in `backend/ai.py` calling the Claude Code CLI (`claude -p`) with the user's Claude subscription.
 - [x] Create a diagnostic endpoint `POST /api/ai/test` that sends a simple prompt ("What is 2+2? Return only the number.") to the AI provider.
 - [x] Create automated test `tests/test_ai_connectivity.py` validating client configuration and response parsing.
 - [x] Verify live connectivity against the AI endpoint.

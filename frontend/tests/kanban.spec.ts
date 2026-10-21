@@ -1,6 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-const login = async (page: any) => {
+const login = async (page: Page) => {
   await page.goto("/");
   const usernameInput = page.getByLabel(/username/i);
   if (await usernameInput.isVisible()) {
@@ -111,7 +111,6 @@ test("submits AI prompt and updates board in real time", async ({ page }) => {
 
   // Intercept /api/ai/chat to return a structured update with an AI-created card
   await page.route("**/api/ai/chat", async (route) => {
-    const postData = route.request().postDataJSON();
     await route.fulfill({
       status: 200,
       contentType: "application/json",

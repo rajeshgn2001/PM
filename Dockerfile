@@ -17,6 +17,12 @@ WORKDIR /app
 # Copy uv from official uv image
 COPY --from=uv_bin /uv /uvx /bin/
 
+# Install Claude Code CLI (used by the backend for AI calls)
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://claude.ai/install.sh | bash
+ENV PATH="/root/.local/bin:$PATH"
+
 # Copy backend dependencies and install
 COPY backend/pyproject.toml /app/backend/
 WORKDIR /app/backend

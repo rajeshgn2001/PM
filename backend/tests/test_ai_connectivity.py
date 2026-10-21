@@ -1,14 +1,8 @@
+import shutil
 import pytest
 from httpx import ASGITransport, AsyncClient
-from ai import get_api_key, generate_simple_completion
+from ai import generate_simple_completion
 from main import app
-
-
-@pytest.mark.asyncio
-async def test_get_api_key():
-    key = get_api_key()
-    assert key != ""
-    assert key.startswith("AQ.")
 
 
 @pytest.mark.asyncio
@@ -28,9 +22,8 @@ async def test_ai_test_endpoint_mock(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_live_gemini_completion():
-    key = get_api_key()
-    if not key:
-        pytest.skip("GEMINI_API_KEY not set")
+async def test_live_claude_completion():
+    if not shutil.which("claude"):
+        pytest.skip("claude CLI not installed")
     response = await generate_simple_completion("What is 2+2? Return only the digit.")
     assert "4" in response
