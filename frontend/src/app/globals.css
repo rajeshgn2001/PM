@@ -8,6 +8,7 @@
   --gray-text: #888888;
   --surface: #f7f8fb;
   --surface-strong: #ffffff;
+  --column-bg: #eef1f6;
   --stroke: rgba(3, 33, 71, 0.08);
   --shadow: 0 18px 40px rgba(3, 33, 71, 0.12);
 }

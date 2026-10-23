@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { BoardData } from "@/lib/kanban";
 import { sendChatMessage, type ChatMessageItem } from "@/lib/api";
+import { CloseIcon, SendIcon } from "@/components/Icons";
 
 type AIChatSidebarProps = {
   isOpen: boolean;
@@ -121,10 +122,11 @@ export const AIChatSidebar = ({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full border border-[var(--stroke)] p-2 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--navy-dark)] hover:text-[var(--navy-dark)]"
+          className="rounded-full p-2 text-[var(--gray-text)] transition hover:bg-[var(--surface)] hover:text-[var(--navy-dark)]"
           aria-label="Close assistant sidebar"
+          title="Close"
         >
-          Close
+          <CloseIcon />
         </button>
       </div>
 
@@ -195,14 +197,16 @@ export const AIChatSidebar = ({
             onKeyDown={handleKeyDown}
             rows={2}
             placeholder="Ask AI to add, move, or edit cards..."
-            className="w-full resize-none rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] p-3 pr-20 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)] focus:bg-white"
+            className="w-full resize-none rounded-2xl border border-[var(--stroke)] bg-[var(--surface)] p-3 pr-14 text-sm text-[var(--navy-dark)] outline-none transition focus:border-[var(--primary-blue)] focus:bg-white"
           />
           <button
             type="submit"
             disabled={!input.trim() || isLoading}
-            className="absolute bottom-3 right-3 rounded-xl bg-[var(--secondary-purple)] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-white shadow transition hover:brightness-110 disabled:opacity-40"
+            className="absolute bottom-3 right-3 rounded-xl bg-[var(--secondary-purple)] p-2 text-white shadow transition hover:brightness-110 disabled:opacity-40"
+            aria-label="Send"
+            title="Send"
           >
-            Send
+            <SendIcon />
           </button>
         </div>
       </form>

@@ -3,6 +3,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import clsx from "clsx";
 import type { Card } from "@/lib/kanban";
+import { PencilIcon, TrashIcon } from "@/components/Icons";
 
 type KanbanCardProps = {
   card: Card;
@@ -40,9 +41,10 @@ export const KanbanCard = ({ card, onUpdate, onDelete }: KanbanCardProps) => {
       ref={setNodeRef}
       style={style}
       className={clsx(
-        "rounded-2xl border border-transparent bg-white px-4 py-4 shadow-[0_12px_24px_rgba(3,33,71,0.08)]",
-        "transition-all duration-150",
-        isDragging && "opacity-60 shadow-[0_18px_32px_rgba(3,33,71,0.16)]"
+        "group relative rounded-xl border border-[var(--stroke)] bg-white px-3.5 py-3 shadow-[0_2px_6px_rgba(3,33,71,0.06)]",
+        "transition-all duration-150 hover:border-[var(--primary-blue)]/40 hover:shadow-[0_6px_16px_rgba(3,33,71,0.10)]",
+        !isEditing && "cursor-grab active:cursor-grabbing",
+        isDragging && "opacity-40"
       )}
       {...(isEditing ? {} : { ...attributes, ...listeners })}
       data-testid={`card-${card.id}`}
@@ -80,34 +82,34 @@ export const KanbanCard = ({ card, onUpdate, onDelete }: KanbanCardProps) => {
           </div>
         </form>
       ) : (
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h4 className="font-display text-base font-semibold text-[var(--navy-dark)]">
-              {card.title}
-            </h4>
-            <p className="mt-2 text-sm leading-6 text-[var(--gray-text)]">
-              {card.details}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
+        <>
+          <h4 className="break-words font-display text-[15px] font-semibold leading-snug text-[var(--navy-dark)] pointer-coarse:pr-16">
+            {card.title}
+          </h4>
+          <div className="absolute right-1.5 top-1.5 flex rounded-lg bg-white/95 opacity-0 shadow-sm ring-1 ring-[var(--stroke)] transition group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100">
             <button
               type="button"
               onClick={startEditing}
-              className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--primary-blue)] transition hover:border-[var(--stroke)]"
+              className="rounded-lg p-1.5 text-[var(--gray-text)] transition hover:bg-[var(--surface)] hover:text-[var(--primary-blue)]"
               aria-label={`Edit ${card.title}`}
+              title="Edit"
             >
-              Edit
+              <PencilIcon />
             </button>
             <button
               type="button"
               onClick={() => onDelete(card.id)}
-              className="rounded-full border border-transparent px-2 py-1 text-xs font-semibold text-[var(--gray-text)] transition hover:border-[var(--stroke)] hover:text-[var(--navy-dark)]"
+              className="rounded-lg p-1.5 text-[var(--gray-text)] transition hover:bg-red-50 hover:text-red-600"
               aria-label={`Delete ${card.title}`}
+              title="Delete"
             >
-              Remove
+              <TrashIcon />
             </button>
           </div>
-        </div>
+          <p className="mt-1.5 break-words text-sm leading-relaxed text-[var(--gray-text)]">
+            {card.details}
+          </p>
+        </>
       )}
     </article>
   );

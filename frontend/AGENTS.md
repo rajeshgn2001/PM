@@ -21,10 +21,11 @@ frontend/
 │   ├── components/
 │   │   ├── KanbanBoard.tsx       # loads/saves board, DnD context, AI lock, edit/add/delete handlers
 │   │   ├── KanbanColumn.tsx      # droppable column with editable title
-│   │   ├── KanbanCard.tsx        # draggable card with inline edit and remove
+│   │   ├── KanbanCard.tsx        # draggable card; edit/delete icon buttons appear on hover
 │   │   ├── KanbanCardPreview.tsx # drag overlay
 │   │   ├── NewCardForm.tsx       # add-card form
 │   │   ├── LoginForm.tsx         # sign-in form
+│   │   ├── Icons.tsx             # inline SVG icons (edit, delete, add, close, send, sign out)
 │   │   └── AIChatSidebar.tsx     # AI chat; reports busy state; shows server error detail
 │   ├── lib/
 │   │   ├── kanban.ts   # types, moveCard (pure), createId
