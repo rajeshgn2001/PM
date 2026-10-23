@@ -4,22 +4,27 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import type { Card, Column } from "@/lib/kanban";
 import { KanbanCard } from "@/components/KanbanCard";
 import { NewCardForm } from "@/components/NewCardForm";
+import { TrashIcon } from "@/components/Icons";
 
 type KanbanColumnProps = {
   column: Column;
   cards: Card[];
+  isDone?: boolean;
   onRename: (columnId: string, title: string) => void;
+  onDelete?: (columnId: string) => void;
   onAddCard: (columnId: string, title: string, details: string) => void;
-  onUpdateCard: (cardId: string, title: string, details: string) => void;
+  onEditCard: (cardId: string) => void;
   onDeleteCard: (columnId: string, cardId: string) => void;
 };
 
 export const KanbanColumn = ({
   column,
   cards,
+  isDone = false,
   onRename,
+  onDelete,
   onAddCard,
-  onUpdateCard,
+  onEditCard,
   onDeleteCard,
 }: KanbanColumnProps) => {
   const { setNodeRef, isOver } = useDroppable({ id: column.id });
@@ -28,7 +33,7 @@ export const KanbanColumn = ({
     <section
       ref={setNodeRef}
       className={clsx(
-        "flex min-h-[480px] flex-col rounded-2xl border-t-[3px] border-[var(--accent-yellow)] bg-[var(--column-bg)] p-3 transition",
+        "flex min-h-[480px] w-72 shrink-0 flex-col rounded-2xl border-t-[3px] border-[var(--accent-yellow)] bg-[var(--column-bg)] p-3 transition",
         isOver && "ring-2 ring-inset ring-[var(--accent-yellow)]"
       )}
       data-testid={`column-${column.id}`}
@@ -46,6 +51,17 @@ export const KanbanColumn = ({
         >
           {cards.length}
         </span>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(column.id)}
+            className="shrink-0 rounded-lg p-1 text-[var(--gray-text)] transition hover:bg-red-50 hover:text-red-600"
+            aria-label={`Delete column ${column.title}`}
+            title="Delete column"
+          >
+            <TrashIcon />
+          </button>
+        )}
       </div>
       <div className="mt-3 flex flex-1 flex-col gap-2.5">
         <SortableContext items={column.cardIds} strategy={verticalListSortingStrategy}>
@@ -53,7 +69,8 @@ export const KanbanColumn = ({
             <KanbanCard
               key={card.id}
               card={card}
-              onUpdate={onUpdateCard}
+              isDone={isDone}
+              onEdit={onEditCard}
               onDelete={(cardId) => onDeleteCard(column.id, cardId)}
             />
           ))}

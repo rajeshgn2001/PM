@@ -259,3 +259,50 @@ Add a responsive AI chat sidebar widget to the frontend that allows users to int
 - The AI chat sidebar is fully functional, visually aligned with project aesthetic standards, and dynamically updates the Kanban board in real time.
 - All automated tests across frontend, backend, and E2E pass.
 - Application operates cleanly inside the Docker container.
+---
+
+## Part 11: Multi-user, Multi-board Project Management
+
+### Objective
+Grow the MVP into a project management app: real accounts, any number of boards per user, flexible columns, richer cards, and search, with thorough unit, API integration and E2E tests.
+
+### Checklist
+- [x] Accounts: register, login with scrypt-hashed passwords, DB-backed session tokens, logout, profile, change password (revokes other sessions), delete account (cascades).
+- [x] Every endpoint except health/login/register requires a Bearer token; boards are scoped to their owner (404 otherwise).
+- [x] Migrate MVP databases: add `sessions`, rehash the plaintext seed password, keep existing boards.
+- [x] Boards API: list, create, get, save, rename, delete. AI chat moved to `POST /api/boards/{id}/ai/chat`.
+- [x] Columns can be added and deleted (validator: at least one column, unique IDs).
+- [x] Cards gain optional priority and due date; overdue and high-priority counts in the board header.
+- [x] Frontend: sign-up, workspace sidebar with board management, account dialog, search and priority filter, 401 handling.
+- [x] Backend tests: auth, accounts, boards, isolation, validation, AI subprocess handling, multi-user workflow integration test; coverage via pytest-cov.
+- [x] Frontend unit tests for every component and lib module; coverage via `npm run test:coverage`.
+- [x] Playwright E2E for sign-up, isolation, board management, columns, priority/due date, search, password change, account deletion, session expiry, AI.
+
+### Verification (2026-10-24)
+- Backend: 49 passed (including live Claude), 99% coverage.
+- Frontend unit: 74 passed, 96% statement coverage. Lint and build clean.
+- Playwright: 13 passed against a throwaway container.
+- Live: AI chat on a new user's board added a high-priority card with a due date and a new column; an MVP-era database signs in with `user` / `password` after migration and keeps its 8 cards.
+
+---
+
+## Part 12: Collaboration and Richer Cards
+
+### Objective
+Make boards collaborative and cards complete enough for real project work, without losing data when several people edit the same board.
+
+### Checklist
+- [x] `board_members` table; owner shares by username; members edit, leave; owner-only rename, delete, invite, remove (403 for members).
+- [x] Optimistic concurrency: `boards.version`, versioned `PUT {version, data}`, 409 on stale writes; AI saves against the version it read.
+- [x] Card assignee (validated against members), labels, checklist; removing a member or deleting an account unassigns their cards.
+- [x] Card dialog for editing all fields; badges for labels, checklist progress and assignee.
+- [x] Assignee filter (including "Assigned to me" and "Unassigned"); search covers labels.
+- [x] Frontend chains saves, reloads with a notice on conflict, and polls shared boards every 10s while idle.
+- [x] AI prompt includes members and the current user, so "assign to me" works.
+- [x] Tests: `test_sharing.py`, versioning and new-field validation, AI conflict and assignee checks, extended integration workflow; `CardDialog` and `ShareDialog` unit tests; multi-browser Playwright tests for sharing, assignment, conflicts and leaving.
+
+### Verification (2026-10-24)
+- Backend: 72 passed (including live Claude), 99% coverage.
+- Frontend unit: 100 passed, 97.7% statement coverage. Lint, typecheck and build clean.
+- Playwright: 17 passed, twice, the second time on a fresh container.
+- Live: the AI created an assigned card with labels and a checklist on a shared board, and resolved "me" to the signed-in user; an MVP-era database migrates (version column, members table) and saves.

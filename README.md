@@ -1,6 +1,6 @@
-# Project Management MVP
+# Kanban Studio
 
-A containerized Kanban web application with real-time AI assistance powered by Claude.
+A containerized project management app: user accounts, multiple Kanban boards per user, board sharing with teammates, cards with priorities, due dates, assignees, labels and checklists, search and filters, and an AI assistant powered by Claude.
 
 ## Requirements
 
@@ -40,15 +40,14 @@ Run `claude setup-token` and add the token to `.env` in the project root:
 CLAUDE_CODE_OAUTH_TOKEN=<token>
 ```
 
-## Sign In Credentials
+## Sign In
 
-- Username: `user`
-- Password: `password`
+Create an account from the sign-in page, or use the demo account `user` / `password`.
 
 ## Architecture
 
 - Frontend: Next.js static export
 - Backend: Python FastAPI runtime using `uv`
-- Database: SQLite (`kanban.db`)
+- Database: SQLite (`kanban.db`, on the `kanban-data` Docker volume)
 - AI: Claude via the Claude Code CLI (`claude -p`) using a Claude subscription, with JSON-schema structured output
 - Container: Multi-stage Docker build exposing port 8000

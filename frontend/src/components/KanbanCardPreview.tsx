@@ -9,8 +9,10 @@ export const KanbanCardPreview = ({ card }: KanbanCardPreviewProps) => (
     <h4 className="break-words font-display text-[15px] font-semibold leading-snug text-[var(--navy-dark)]">
       {card.title}
     </h4>
-    <p className="mt-1.5 break-words text-sm leading-relaxed text-[var(--gray-text)]">
-      {card.details}
-    </p>
+    {card.details && (
+      <p className="mt-1.5 break-words text-sm leading-relaxed text-[var(--gray-text)]">
+        {card.details}
+      </p>
+    )}
   </article>
 );

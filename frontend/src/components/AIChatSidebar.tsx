@@ -6,9 +6,10 @@ import { sendChatMessage, type ChatMessageItem } from "@/lib/api";
 import { CloseIcon, SendIcon } from "@/components/Icons";
 
 type AIChatSidebarProps = {
+  boardId: number;
   isOpen: boolean;
   onClose: () => void;
-  onBoardUpdate: (updatedBoard: BoardData) => void;
+  onBoardUpdate: (updatedBoard: BoardData, version: number) => void;
   onBusyChange?: (isBusy: boolean) => void;
 };
 
@@ -22,11 +23,13 @@ const INITIAL_MESSAGES: ChatMessageItem[] = [
 
 const SUGGESTED_PROMPTS = [
   "What cards are in Backlog?",
-  "Add a card 'Docker deployment' to In Progress",
-  "Move 'Align roadmap themes' to Done",
+  "Add a high priority card 'Docker deployment' due next Friday",
+  "What is overdue?",
+  "What is assigned to me?",
 ];
 
 export const AIChatSidebar = ({
+  boardId,
   isOpen,
   onClose,
   onBoardUpdate,
@@ -64,7 +67,7 @@ export const AIChatSidebar = ({
         content: msg.content,
       }));
 
-      const res = await sendChatMessage(trimmed, historyPayload);
+      const res = await sendChatMessage(boardId, trimmed, historyPayload);
 
       setMessages((prev) => [
         ...prev,
@@ -76,7 +79,7 @@ export const AIChatSidebar = ({
       ]);
 
       if (res.board_update && res.board_changed) {
-        onBoardUpdate(res.board_update);
+        onBoardUpdate(res.board_update, res.version);
       }
     } catch (error) {
       setMessages((prev) => [

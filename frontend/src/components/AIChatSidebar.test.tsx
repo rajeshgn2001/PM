@@ -7,14 +7,14 @@ import * as api from "@/lib/api";
 describe("AIChatSidebar", () => {
   it("renders nothing when isOpen is false", () => {
     const { container } = render(
-      <AIChatSidebar isOpen={false} onClose={vi.fn()} onBoardUpdate={vi.fn()} />
+      <AIChatSidebar boardId={7} isOpen={false} onClose={vi.fn()} onBoardUpdate={vi.fn()} />
     );
     expect(container.firstChild).toBeNull();
   });
 
   it("renders assistant header and greeting when open", () => {
     render(
-      <AIChatSidebar isOpen={true} onClose={vi.fn()} onBoardUpdate={vi.fn()} />
+      <AIChatSidebar boardId={7} isOpen={true} onClose={vi.fn()} onBoardUpdate={vi.fn()} />
     );
     expect(screen.getByText("AI Project Assistant")).toBeInTheDocument();
     expect(screen.getByText(/I am your project assistant/i)).toBeInTheDocument();
@@ -23,7 +23,7 @@ describe("AIChatSidebar", () => {
   it("calls onClose when close button is clicked", async () => {
     const handleClose = vi.fn();
     render(
-      <AIChatSidebar isOpen={true} onClose={handleClose} onBoardUpdate={vi.fn()} />
+      <AIChatSidebar boardId={7} isOpen={true} onClose={handleClose} onBoardUpdate={vi.fn()} />
     );
     await userEvent.click(screen.getByLabelText(/close assistant sidebar/i));
     expect(handleClose).toHaveBeenCalled();
@@ -36,10 +36,12 @@ describe("AIChatSidebar", () => {
       message: "I created the card.",
       board_update: fakeBoard,
       board_changed: true,
+      version: 4,
     });
 
     render(
       <AIChatSidebar
+        boardId={7}
         isOpen={true}
         onClose={vi.fn()}
         onBoardUpdate={handleBoardUpdate}
@@ -54,7 +56,10 @@ describe("AIChatSidebar", () => {
       expect(screen.getByText("I created the card.")).toBeInTheDocument();
     });
 
-    expect(handleBoardUpdate).toHaveBeenCalledWith(fakeBoard);
+    expect(handleBoardUpdate).toHaveBeenCalledWith(fakeBoard, 4);
+    expect(api.sendChatMessage).toHaveBeenCalledWith(7, "Create card", [
+      { role: "model", content: expect.stringMatching(/project assistant/) },
+    ]);
     expect(screen.getByText("Board updated")).toBeInTheDocument();
   });
 
@@ -66,6 +71,7 @@ describe("AIChatSidebar", () => {
 
     render(
       <AIChatSidebar
+        boardId={7}
         isOpen={true}
         onClose={vi.fn()}
         onBoardUpdate={vi.fn()}

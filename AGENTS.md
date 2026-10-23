@@ -1,21 +1,23 @@
-# The Project Management MVP web app
+# The Project Management web app
 
 ## Business Requirements
 
 This project is building a Project Management App. Key features:
-- A user can sign in
-- When signed in, the user sees a Kanban board representing their project
-- The Kanban board has fixed columns that can be renamed
-- The cards on the Kanban board can be moved with drag and drop, and edited
-- There is an AI chat feature in a sidebar; the AI is able to create / edit / move one or more cards
+- People can create an account, sign in and out, change their password, and delete their account
+- Each user has any number of Kanban boards (create, rename, switch, delete)
+- The owner can share a board with other users by username; members can edit it and leave it, only the owner can rename, delete or manage members. Concurrent edits never silently overwrite each other (a stale save is rejected and the client reloads), and shared boards pick up teammates' changes while idle
+- Columns can be added, renamed and deleted
+- Cards can be added, moved with drag and drop, edited (in a card dialog) and deleted; a card has a title, details, an optional priority (low / medium / high), due date and assignee (a board member), labels, and a checklist
+- Cards can be searched (title, details, labels) and filtered by priority and assignee; the board header shows done, overdue and open high-priority counts (the last column counts as done)
+- There is an AI chat feature in a sidebar; the AI can create / edit / move cards and columns on the current board
 
 ## Limitations
 
-For the MVP, there will only be a user sign in (hardcoded to 'user' and 'password') but the database will support multiple users for future.
+The demo account `user` / `password` is seeded with a sample board.
 
-For the MVP, there will only be 1 Kanban board per signed in user.
+Members have equal edit rights (no read-only role). There is no real-time push; shared boards poll every 10 seconds while idle.
 
-For the MVP, this will run locally (in a docker container)
+This runs locally (in a docker container).
 
 ## Technical Decisions
 

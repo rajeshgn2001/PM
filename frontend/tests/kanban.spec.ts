@@ -1,91 +1,125 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 
-const login = async (page: Page) => {
+const columns = (page: Page) => page.locator('[data-testid^="column-"]');
+const boardNav = (page: Page) => page.getByRole("navigation", { name: "Boards" });
+const boardButton = (page: Page, title: string) =>
+  boardNav(page).getByRole("button", { name: title, exact: true });
+
+const signIn = async (page: Page, username = "user", password = "password") => {
   await page.goto("/");
-  const usernameInput = page.getByLabel(/username/i);
-  if (await usernameInput.isVisible()) {
-    await usernameInput.fill("user");
-    await page.getByLabel(/password/i).fill("password");
-    await page.getByRole("button", { name: /sign in/i }).click();
-  }
-  await expect(page.locator('[data-testid^="column-"]').first()).toBeVisible();
+  await page.getByLabel(/username/i).fill(username);
+  await page.getByLabel(/password/i).fill(password);
+  await page.getByRole("button", { name: /^sign in$/i }).click();
+  await expect(columns(page).first()).toBeVisible();
+};
+
+// Registers a fresh account so the test starts from a clean, isolated workspace.
+const registerNewUser = async (page: Page, password = "secret123") => {
+  const username = `e2e-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  await page.goto("/");
+  await page.getByRole("button", { name: /create an account/i }).click();
+  await page.getByLabel(/username/i).fill(username);
+  await page.getByLabel(/password/i).fill(password);
+  await page.getByRole("button", { name: /^create account$/i }).click();
+  await expect(page.getByRole("heading", { name: "My First Board" })).toBeVisible();
+  return username;
+};
+
+const addCard = async (page: Page, columnIndex: number, title: string) => {
+  const column = columns(page).nth(columnIndex);
+  await column.getByRole("button", { name: /add a card/i }).click();
+  await column.getByPlaceholder("Card title").fill(title);
+  await column.getByRole("button", { name: /add card/i }).click();
+  await expect(column.getByText(title)).toBeVisible();
+};
+
+// A second, independent browser session, as another person would have.
+const newSession = async (browser: Browser) => (await browser.newContext()).newPage();
+
+const shareCurrentBoard = async (page: Page, username: string) => {
+  await page.getByRole("button", { name: "Share board" }).click();
+  await page.getByLabel("Username to invite").fill(username);
+  await page.getByRole("button", { name: /invite/i }).click();
+  await expect(page.getByRole("list", { name: "Members" }).getByText(username)).toBeVisible();
+  await page.getByRole("button", { name: "Close members" }).click();
+};
+
+// Board saves are debounced; wait until the save indicator clears.
+const waitForSave = async (page: Page) => {
+  await expect(page.getByText("Saving...")).toHaveCount(0);
 };
 
 test("requires login to access the kanban board", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
-
-  // Test failed login
-  await page.getByLabel(/username/i).fill("wrong");
+  await page.getByLabel(/username/i).fill("user");
   await page.getByLabel(/password/i).fill("wrong");
-  await page.getByRole("button", { name: /sign in/i }).click();
+  await page.getByRole("button", { name: /^sign in$/i }).click();
   await expect(page.getByText("Invalid username or password")).toBeVisible();
 
-  // Test successful login
-  await page.getByLabel(/username/i).fill("user");
   await page.getByLabel(/password/i).fill("password");
-  await page.getByRole("button", { name: /sign in/i }).click();
+  await page.getByRole("button", { name: /^sign in$/i }).click();
+  await expect(page.getByRole("heading", { name: "Kanban Studio", level: 1 })).toBeVisible();
+  await expect(columns(page)).toHaveCount(5);
 
-  await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
-
-  // Test sign out
   await page.getByRole("button", { name: /sign out/i }).click();
-  await expect(page.getByRole("button", { name: /sign in/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^sign in$/i })).toBeVisible();
 });
 
-test("loads the kanban board when authenticated", async ({ page }) => {
-  await login(page);
-  await expect(page.locator('[data-testid^="column-"]')).toHaveCount(5);
-});
-
-test("adds a card to a column", async ({ page }) => {
-  await login(page);
-  const firstColumn = page.locator('[data-testid^="column-"]').first();
-  const cardTitle = `Playwright Card ${Date.now()}`;
-  await firstColumn.getByRole("button", { name: /add a card/i }).click();
-  await firstColumn.getByPlaceholder("Card title").fill(cardTitle);
-  await firstColumn.getByPlaceholder("Details").fill("Added via e2e.");
-  await firstColumn.getByRole("button", { name: /add card/i }).click();
-  await expect(firstColumn.getByText(cardTitle)).toBeVisible();
+test("returns to sign in when the session is no longer valid", async ({ page }) => {
+  await signIn(page);
+  await page.evaluate(() => sessionStorage.setItem("kanban_auth_token", "revoked"));
+  await page.reload();
+  await expect(page.getByRole("button", { name: /^sign in$/i })).toBeVisible();
 });
 
 test("persists added cards across page reload", async ({ page }) => {
-  await login(page);
-  const firstColumn = page.locator('[data-testid^="column-"]').first();
+  await signIn(page);
   const cardTitle = `Reload Persistence ${Date.now()}`;
-  await firstColumn.getByRole("button", { name: /add a card/i }).click();
-  await firstColumn.getByPlaceholder("Card title").fill(cardTitle);
-  await firstColumn.getByPlaceholder("Details").fill("Should survive reload.");
-  await firstColumn.getByRole("button", { name: /add card/i }).click();
-  await expect(firstColumn.getByText(cardTitle)).toBeVisible();
-
-  // Wait for debounced save to persist to SQLite backend
-  await page.waitForTimeout(600);
-
-  // Reload the browser page
+  await addCard(page, 0, cardTitle);
+  await waitForSave(page);
   await page.reload();
-
-  // Assert card is restored from backend
-  await expect(firstColumn.getByText(cardTitle)).toBeVisible();
+  await expect(columns(page).first().getByText(cardTitle)).toBeVisible();
 });
 
-test("edits a card and persists the change", async ({ page }) => {
-  await login(page);
-  const card = page.getByTestId("card-card-2");
-  await card.getByRole("button", { name: /^edit /i }).click();
+test("edits a card's details in the card dialog and persists the change", async ({ page }) => {
+  await signIn(page);
+  await page.getByTestId("card-card-2").getByRole("button", { name: /^edit /i }).click();
+  const dialog = page.getByRole("dialog", { name: "Edit card" });
   const newTitle = `Edited ${Date.now()}`;
-  await card.getByLabel("Edit card title").fill(newTitle);
-  await card.getByLabel("Edit card details").fill("Edited via e2e.");
-  await card.getByRole("button", { name: /^save$/i }).click();
-  await expect(card.getByText(newTitle)).toBeVisible();
+  await dialog.getByLabel("Edit card title").fill(newTitle);
+  await dialog.getByLabel("Edit card details").fill("Edited via e2e.");
+  await dialog.getByLabel("Edit card priority").selectOption("high");
+  await dialog.getByLabel("Edit card due date").fill("2020-02-03");
+  await dialog.getByLabel("Edit card assignee").selectOption("user");
+  await dialog.getByLabel("Edit card labels").fill("research, q4");
+  await dialog.getByLabel("New checklist item").fill("Interview five customers");
+  await dialog.getByLabel("New checklist item").press("Enter");
+  await dialog.getByLabel("New checklist item").fill("Summarize findings");
+  await dialog.getByLabel("New checklist item").press("Enter");
+  await dialog.getByLabel("Interview five customers", { exact: true }).check();
+  await dialog.getByRole("button", { name: /^save$/i }).click();
 
-  await page.waitForTimeout(600);
+  const card = page.getByTestId("card-card-2");
+  await expect(card.getByText(newTitle)).toBeVisible();
+  await expect(card.getByTitle("Overdue")).toHaveText("Feb 3");
+  await expect(card.getByTitle("Checklist")).toHaveText("1/2");
+
+  await waitForSave(page);
   await page.reload();
-  await expect(page.getByTestId("card-card-2").getByText(newTitle)).toBeVisible();
+  const reloaded = page.getByTestId("card-card-2");
+  await expect(reloaded.getByText(newTitle)).toBeVisible();
+  await expect(reloaded.getByText("high")).toBeVisible();
+  await expect(reloaded.getByText("research")).toBeVisible();
+  await expect(reloaded.getByTitle("Assigned to user")).toBeVisible();
+  await expect(reloaded.getByTitle("Checklist")).toHaveText("1/2");
+  await expect(page.getByTestId("board-stats")).toContainText("1 overdue");
+
+  await page.getByLabel("Filter by assignee").selectOption({ label: "Assigned to me" });
+  await expect(page.getByText("Showing 1 of")).toBeVisible();
 });
 
 test("moves a card between columns", async ({ page }) => {
-  await login(page);
+  await signIn(page);
   const card = page.getByTestId("card-card-1");
   const targetColumn = page.getByTestId("column-col-review");
   const cardBox = await card.boundingBox();
@@ -94,38 +128,146 @@ test("moves a card between columns", async ({ page }) => {
     throw new Error("Unable to resolve drag coordinates.");
   }
 
-  await page.mouse.move(
-    cardBox.x + cardBox.width / 2,
-    cardBox.y + cardBox.height / 2
-  );
+  await page.mouse.move(cardBox.x + cardBox.width / 2, cardBox.y + cardBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(
-    columnBox.x + columnBox.width / 2,
-    columnBox.y + 120,
-    { steps: 12 }
-  );
+  await page.mouse.move(columnBox.x + columnBox.width / 2, columnBox.y + 120, { steps: 12 });
   await page.mouse.up();
   await expect(targetColumn.getByTestId("card-card-1")).toBeVisible();
+
+  await waitForSave(page);
+  await page.reload();
+  await expect(page.getByTestId("column-col-review").getByTestId("card-card-1")).toBeVisible();
+});
+
+test("new users get their own workspace, isolated from other users", async ({ page }) => {
+  const username = await registerNewUser(page);
+  await expect(page.getByText(username)).toBeVisible();
+  await expect(columns(page)).toHaveCount(3);
+  await expect(page.getByText("Align roadmap themes")).toHaveCount(0);
+
+  await addCard(page, 0, "Private card");
+  await waitForSave(page);
+  await page.getByRole("button", { name: /sign out/i }).click();
+
+  await signIn(page);
+  await expect(page.getByText("Private card")).toHaveCount(0);
+  await expect(boardButton(page, "My First Board")).toHaveCount(0);
+});
+
+test("registration rejects a taken username", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /create an account/i }).click();
+  await page.getByLabel(/username/i).fill("user");
+  await page.getByLabel(/password/i).fill("secret123");
+  await page.getByRole("button", { name: /^create account$/i }).click();
+  await expect(page.getByText("Username is already taken")).toBeVisible();
+});
+
+test("creates, switches, renames and deletes boards", async ({ page }) => {
+  await registerNewUser(page);
+  await addCard(page, 0, "First board card");
+  await waitForSave(page);
+
+  await boardNav(page).getByRole("button", { name: /new board/i }).click();
+  await page.getByLabel("New board name").fill("Launch Plan");
+  await page.getByRole("button", { name: /^create$/i }).click();
+  await expect(page.getByRole("heading", { name: "Launch Plan" })).toBeVisible();
+  await expect(page.getByText("First board card")).toHaveCount(0);
+  await addCard(page, 1, "Launch card");
+  await waitForSave(page);
+
+  await boardButton(page, "My First Board").click();
+  await expect(page.getByText("First board card")).toBeVisible();
+  await expect(page.getByText("Launch card")).toHaveCount(0);
+
+  await boardNav(page).getByRole("button", { name: "Rename board Launch Plan" }).click();
+  await page.getByLabel("Board name").fill("Launch Q1");
+  await page.getByLabel("Board name").press("Enter");
+  await expect(boardButton(page, "Launch Q1")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "My First Board" })).toBeVisible();
+  await boardButton(page, "Launch Q1").click();
+  await expect(page.getByText("Launch card")).toBeVisible();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await boardNav(page).getByRole("button", { name: "Delete board Launch Q1" }).click();
+  await expect(page.getByRole("heading", { name: "My First Board" })).toBeVisible();
+  await page.reload();
+  await expect(boardButton(page, "Launch Q1")).toHaveCount(0);
+});
+
+test("adds, renames and deletes columns", async ({ page }) => {
+  await registerNewUser(page);
+  await page.getByRole("button", { name: /add column/i }).click();
+  await expect(columns(page)).toHaveCount(4);
+  await columns(page).nth(3).getByLabel("Column title").fill("Blocked");
+  await waitForSave(page);
+
+  await page.getByRole("button", { name: "Delete column In Progress" }).click();
+  await expect(columns(page)).toHaveCount(3);
+  await waitForSave(page);
+  await page.reload();
+  await expect(columns(page)).toHaveCount(3);
+  const titles = await columns(page).getByLabel("Column title").evaluateAll((inputs) =>
+    inputs.map((input) => (input as HTMLInputElement).value)
+  );
+  expect(titles).toEqual(["To Do", "Done", "Blocked"]);
+});
+
+test("searches and filters cards", async ({ page }) => {
+  await registerNewUser(page);
+  await addCard(page, 0, "Write release notes");
+  await addCard(page, 0, "Fix payment bug");
+  await page.getByLabel("Search cards").fill("payment");
+  await expect(page.getByText("Fix payment bug")).toBeVisible();
+  await expect(page.getByText("Write release notes")).toHaveCount(0);
+  await expect(page.getByText("Showing 1 of 2 cards")).toBeVisible();
+  await page.getByRole("button", { name: /clear filters/i }).click();
+  await expect(page.getByText("Write release notes")).toBeVisible();
+});
+
+test("changes the password and deletes the account", async ({ page }) => {
+  const username = await registerNewUser(page, "first-pass");
+  await page.getByRole("button", { name: "Account settings" }).click();
+  await expect(page.getByRole("dialog")).toContainText(`Signed in as ${username}`);
+  await page.getByLabel("Current password").fill("first-pass");
+  await page.getByLabel("New password").fill("second-pass");
+  await page.getByRole("button", { name: /update password/i }).click();
+  await expect(page.getByRole("dialog").getByRole("status")).toContainText("Password updated");
+  await page.getByRole("button", { name: "Close account settings" }).click();
+  await page.getByRole("button", { name: /sign out/i }).click();
+
+  await page.getByLabel(/username/i).fill(username);
+  await page.getByLabel(/password/i).fill("first-pass");
+  await page.getByRole("button", { name: /^sign in$/i }).click();
+  await expect(page.getByText("Invalid username or password")).toBeVisible();
+  await signIn(page, username, "second-pass");
+
+  await page.getByRole("button", { name: "Account settings" }).click();
+  await page.getByLabel("Confirm with your password").fill("second-pass");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: /^delete account$/i }).click();
+  await expect(page.getByRole("button", { name: /^sign in$/i })).toBeVisible();
+
+  await page.getByLabel(/username/i).fill(username);
+  await page.getByLabel(/password/i).fill("second-pass");
+  await page.getByRole("button", { name: /^sign in$/i }).click();
+  await expect(page.getByText("Invalid username or password")).toBeVisible();
 });
 
 test("opens and closes the AI assistant sidebar", async ({ page }) => {
-  await login(page);
+  await signIn(page);
   await page.getByRole("button", { name: /ai assistant/i }).click();
   await expect(page.getByText("AI Project Assistant")).toBeVisible();
-  await expect(
-    page.getByPlaceholder(/ask ai to add, move, or edit cards/i)
-  ).toBeVisible();
-
-  // Close sidebar
   await page.getByRole("button", { name: /close assistant sidebar/i }).click();
   await expect(page.getByText("AI Project Assistant")).not.toBeVisible();
 });
 
-test("submits AI prompt and updates board in real time", async ({ page }) => {
-  await login(page);
+test("submits AI prompt and updates the current board in real time", async ({ page }) => {
+  await registerNewUser(page);
 
-  // Intercept /api/ai/chat to return a structured update with an AI-created card
-  await page.route("**/api/ai/chat", async (route) => {
+  await page.route("**/api/boards/*/ai/chat", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -134,26 +276,17 @@ test("submits AI prompt and updates board in real time", async ({ page }) => {
         board_changed: true,
         board_update: {
           columns: [
-            {
-              id: "col-backlog",
-              title: "Backlog",
-              cardIds: ["card-1", "card-ai-dynamic"],
-            },
-            { id: "col-discovery", title: "Discovery", cardIds: [] },
+            { id: "col-todo", title: "To Do", cardIds: ["card-ai-dynamic"] },
             { id: "col-progress", title: "In Progress", cardIds: [] },
-            { id: "col-review", title: "Review", cardIds: [] },
             { id: "col-done", title: "Done", cardIds: [] },
           ],
           cards: {
-            "card-1": {
-              id: "card-1",
-              title: "Align roadmap themes",
-              details: "Existing backlog task.",
-            },
             "card-ai-dynamic": {
               id: "card-ai-dynamic",
               title: "AI Dynamic Card",
-              details: "Rendered dynamically without page reload.",
+              details: "Rendered without page reload.",
+              priority: "high",
+              dueDate: null,
             },
           },
         },
@@ -161,24 +294,95 @@ test("submits AI prompt and updates board in real time", async ({ page }) => {
     });
   });
 
-  // Open sidebar
   await page.getByRole("button", { name: /ai assistant/i }).click();
-  await expect(page.getByText("AI Project Assistant")).toBeVisible();
-
-  // Enter prompt and submit
-  const input = page.getByPlaceholder(/ask ai to add, move, or edit cards/i);
-  await input.fill("Add a card to Backlog named AI Dynamic Card");
+  await page.getByPlaceholder(/ask ai to add, move, or edit cards/i).fill("Add AI Dynamic Card");
   await page.getByRole("button", { name: /send/i }).click();
 
-  // Assert AI response appears in chat
-  await expect(
-    page.getByText("I created the card AI Dynamic Card for you.")
-  ).toBeVisible();
-
-  // Assert board updated badge appears
+  await expect(page.getByText("I created the card AI Dynamic Card for you.")).toBeVisible();
   await expect(page.getByText("Board updated")).toBeVisible();
+  const todo = page.getByTestId("column-col-todo");
+  await expect(todo.getByText("AI Dynamic Card")).toBeVisible();
+  await expect(todo.getByText("high")).toBeVisible();
+});
 
-  // Assert card is rendered in Backlog without reload
-  const backlogColumn = page.locator('[data-testid="column-col-backlog"]');
-  await expect(backlogColumn.getByText("AI Dynamic Card")).toBeVisible();
+test("owners share boards with teammates who can edit and be assigned cards", async ({ page, browser }) => {
+  const owner = await registerNewUser(page);
+  await addCard(page, 0, "Shared task");
+  await waitForSave(page);
+
+  const teammatePage = await newSession(browser);
+  const teammate = await registerNewUser(teammatePage);
+  await shareCurrentBoard(page, teammate);
+
+  // The teammate sees the shared board, marked with its owner, without owner-only actions.
+  await teammatePage.reload();
+  await expect(teammatePage.getByText(`Shared by ${owner}`)).toBeVisible();
+  await boardNav(teammatePage).getByRole("button", { name: new RegExp(`Shared by ${owner}`) }).click();
+  await expect(teammatePage.getByText("Shared task")).toBeVisible();
+  await expect(teammatePage.getByRole("button", { name: "Board members" })).toBeVisible();
+  await expect(boardNav(teammatePage).getByRole("button", { name: /^Rename board/ })).toHaveCount(1);
+
+  // The teammate assigns the card to themselves; the owner sees it without reloading.
+  await teammatePage.getByRole("button", { name: "Edit Shared task", exact: true }).click();
+  await teammatePage.getByLabel("Edit card assignee").selectOption(teammate);
+  await teammatePage.getByRole("button", { name: /^save$/i }).click();
+  await waitForSave(teammatePage);
+  await expect(page.getByTitle(`Assigned to ${teammate}`)).toBeVisible({ timeout: 15_000 });
+
+  // Removing the teammate unassigns the card and revokes access.
+  await page.getByRole("button", { name: "Share board" }).click();
+  await page.getByRole("button", { name: `Remove ${teammate}` }).click();
+  await page.getByRole("button", { name: "Close members" }).click();
+  await expect(page.getByTitle(`Assigned to ${teammate}`)).toHaveCount(0);
+  await teammatePage.reload();
+  await expect(teammatePage.getByText(`Shared by ${owner}`)).toHaveCount(0);
+});
+
+test("concurrent edits to a shared board are not silently overwritten", async ({ page, browser }) => {
+  await registerNewUser(page);
+  const teammatePage = await newSession(browser);
+  const teammate = await registerNewUser(teammatePage);
+  await shareCurrentBoard(page, teammate);
+  await teammatePage.reload();
+  await boardNav(teammatePage).getByRole("button", { name: /Shared by/ }).click();
+  await expect(columns(teammatePage)).toHaveCount(3);
+
+  // Both have the same version loaded; the owner saves first.
+  await addCard(page, 0, "Owner card");
+  await waitForSave(page);
+  await addCard(teammatePage, 1, "Teammate card");
+
+  await expect(teammatePage.getByText(/your last change was not saved/)).toBeVisible();
+  await expect(teammatePage.getByText("Owner card")).toBeVisible();
+  await expect(teammatePage.getByText("Teammate card")).toHaveCount(0);
+
+  // After the reload the teammate's next change saves normally.
+  await addCard(teammatePage, 1, "Teammate retry");
+  await waitForSave(teammatePage);
+  await page.reload();
+  await expect(page.getByText("Owner card")).toBeVisible();
+  await expect(page.getByText("Teammate retry")).toBeVisible();
+});
+
+test("members can leave a shared board", async ({ page, browser }) => {
+  await registerNewUser(page);
+  const teammatePage = await newSession(browser);
+  const teammate = await registerNewUser(teammatePage);
+  await shareCurrentBoard(page, teammate);
+
+  await teammatePage.reload();
+  await boardNav(teammatePage).getByRole("button", { name: /Shared by/ }).click();
+  await teammatePage.getByRole("button", { name: "Board members" }).click();
+  teammatePage.once("dialog", (dialog) => dialog.accept());
+  await teammatePage.getByRole("button", { name: /leave board/i }).click();
+  await expect(boardNav(teammatePage).getByText(/Shared by/)).toHaveCount(0);
+  await expect(teammatePage.getByRole("heading", { name: "My First Board" })).toBeVisible();
+});
+
+test("sharing with an unknown user explains the problem", async ({ page }) => {
+  await registerNewUser(page);
+  await page.getByRole("button", { name: "Share board" }).click();
+  await page.getByLabel("Username to invite").fill("no-such-user-xyz");
+  await page.getByRole("button", { name: /invite/i }).click();
+  await expect(page.getByText("No user named no-such-user-xyz")).toBeVisible();
 });

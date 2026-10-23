@@ -1,27 +1,32 @@
 import shutil
+
 import pytest
-from httpx import ASGITransport, AsyncClient
+
 from ai import generate_simple_completion
-from main import app
 
 
-@pytest.mark.asyncio
-async def test_ai_test_endpoint_mock(monkeypatch):
+async def test_ai_test_endpoint_mock(client, auth, monkeypatch):
     async def mock_completion(prompt: str):
         return "4"
 
     monkeypatch.setattr("main.generate_simple_completion", mock_completion)
 
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post("/api/ai/test")
-        assert response.status_code == 200
-        data = response.json()
-        assert data["status"] == "ok"
-        assert data["response"] == "4"
+    response = await client.post("/api/ai/test", headers=auth)
+    assert response.status_code == 200
+    assert response.json()["response"] == "4"
+    assert (await client.post("/api/ai/test")).status_code == 401
 
 
-@pytest.mark.asyncio
+async def test_ai_test_endpoint_reports_failure(client, auth, monkeypatch):
+    async def failing(prompt: str):
+        raise RuntimeError("claude exited 1")
+
+    monkeypatch.setattr("main.generate_simple_completion", failing)
+    response = await client.post("/api/ai/test", headers=auth)
+    assert response.status_code == 500
+    assert response.json()["detail"] == "claude exited 1"
+
+
 async def test_live_claude_completion():
     if not shutil.which("claude"):
         pytest.skip("claude CLI not installed")

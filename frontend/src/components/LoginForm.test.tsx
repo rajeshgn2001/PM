@@ -36,3 +36,36 @@ describe("LoginForm", () => {
     await waitFor(() => expect(handleSuccess).toHaveBeenCalledWith("user"));
   });
 });
+
+describe("LoginForm registration", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    mockLoginFetch();
+  });
+
+  it("creates an account and signs in", async () => {
+    const handleSuccess = vi.fn();
+    render(<LoginForm onLoginSuccess={handleSuccess} />);
+    await userEvent.click(screen.getByRole("button", { name: /create an account/i }));
+    expect(screen.queryByText(/demo credentials/i)).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText(/username/i), "newbie");
+    await userEvent.type(screen.getByLabelText(/password/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /^create account$/i }));
+
+    await waitFor(() => expect(handleSuccess).toHaveBeenCalledWith("newbie"));
+  });
+
+  it("shows why registration failed and can switch back to sign in", async () => {
+    render(<LoginForm onLoginSuccess={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: /create an account/i }));
+    await userEvent.type(screen.getByLabelText(/username/i), "user");
+    await userEvent.type(screen.getByLabelText(/password/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /^create account$/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Username is already taken");
+
+    await userEvent.click(screen.getByRole("button", { name: /^sign in$/i }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(/demo credentials/i)).toBeInTheDocument();
+  });
+});

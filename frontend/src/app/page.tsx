@@ -1,37 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { KanbanBoard } from "@/components/KanbanBoard";
+import { useEffect, useState } from "react";
+import { Workspace } from "@/components/Workspace";
 import { LoginForm } from "@/components/LoginForm";
-import { getStoredAuth, logoutUser } from "@/lib/auth";
+import { AUTH_EXPIRED_EVENT, getStoredAuth, logoutUser } from "@/lib/auth";
 
 export default function Home() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return getStoredAuth().isAuthenticated;
-    }
-    return false;
-  });
-  const [username, setUsername] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return getStoredAuth().username || "user";
-    }
-    return "user";
-  });
+  const [username, setUsername] = useState<string | null>(() =>
+    typeof window !== "undefined" ? getStoredAuth().username : null
+  );
 
-  const handleLoginSuccess = (user: string) => {
-    setUsername(user);
-    setIsAuthenticated(true);
-  };
+  useEffect(() => {
+    const handleExpired = () => setUsername(null);
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleExpired);
+  }, []);
 
   const handleLogout = async () => {
     await logoutUser();
-    setIsAuthenticated(false);
+    setUsername(null);
   };
 
-  if (!isAuthenticated) {
-    return <LoginForm onLoginSuccess={handleLoginSuccess} />;
+  if (!username) {
+    return <LoginForm onLoginSuccess={setUsername} />;
   }
 
-  return <KanbanBoard onLogout={handleLogout} username={username} />;
+  return <Workspace key={username} username={username} onLogout={handleLogout} />;
 }
