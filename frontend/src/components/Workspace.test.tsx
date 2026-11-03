@@ -9,6 +9,10 @@ vi.mock("@/lib/api", () => ({
   createBoard: vi.fn(),
   renameBoard: vi.fn(),
   deleteBoard: vi.fn(),
+  listGroups: vi.fn(),
+  createGroup: vi.fn(),
+  renameGroup: vi.fn(),
+  moveBoardToGroup: vi.fn(),
   fetchBoard: vi.fn(),
   saveBoard: vi.fn(),
   listMembers: vi.fn(),
@@ -29,6 +33,7 @@ const summary = (id: number, title: string, role: "owner" | "member" = "owner", 
   updated_at: "2026-10-01 10:00:00",
   card_count: 0,
   open_card_count: 0,
+  group_id: 1,
 });
 
 const emptyData = { columns: [{ id: "col-todo", title: "To Do", cardIds: [] }], cards: {} };
@@ -44,6 +49,7 @@ describe("Workspace", () => {
     vi.clearAllMocks();
     sessionStorage.clear();
     vi.mocked(api.listBoards).mockResolvedValue([summary(1, "Roadmap"), summary(2, "Sprint")]);
+    vi.mocked(api.listGroups).mockResolvedValue([{ id: 1, name: "DEFAULT" }]);
     vi.mocked(api.fetchBoard).mockImplementation(async (id) => board(id, id === 1 ? "Roadmap" : "Sprint"));
     vi.mocked(api.listMembers).mockResolvedValue([{ username: "alice", role: "owner" }]);
   });
@@ -164,6 +170,74 @@ describe("Workspace", () => {
     await userEvent.click(within(boardNav()).getByRole("button", { name: "Sprint" }));
     await screen.findByRole("heading", { name: "Sprint" });
     await waitFor(() => expect(row("Sprint")).toHaveClass("text-[var(--gray-text)]/60"));
+  });
+
+  it("lists boards under their groups", async () => {
+    vi.mocked(api.listBoards).mockResolvedValue([summary(1, "Roadmap"), { ...summary(2, "Sprint"), group_id: 2 }]);
+    vi.mocked(api.listGroups).mockResolvedValue([
+      { id: 1, name: "DEFAULT" },
+      { id: 2, name: "Work" },
+    ]);
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Roadmap" });
+    const defaultGroup = screen.getByRole("region", { name: "Group DEFAULT" });
+    const workGroup = screen.getByRole("region", { name: "Group Work" });
+    expect(within(defaultGroup).getByRole("button", { name: "Roadmap" })).toBeInTheDocument();
+    expect(within(workGroup).getByRole("button", { name: "Sprint" })).toBeInTheDocument();
+    expect(within(defaultGroup).queryByRole("button", { name: "Sprint" })).not.toBeInTheDocument();
+  });
+
+  it("creates a group", async () => {
+    vi.mocked(api.createGroup).mockResolvedValue({ id: 2, name: "Work" });
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Roadmap" });
+    await userEvent.click(screen.getByRole("button", { name: /new group/i }));
+    await userEvent.type(screen.getByLabelText("New group name"), "  Work {enter}");
+    expect(api.createGroup).toHaveBeenCalledWith("Work");
+    expect(await screen.findByRole("region", { name: "Group Work" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("New group name")).not.toBeInTheDocument();
+  });
+
+  it("renames a group", async () => {
+    vi.mocked(api.renameGroup).mockResolvedValue({ id: 1, name: "Personal" });
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Roadmap" });
+    await userEvent.click(screen.getByRole("button", { name: "Rename group DEFAULT" }));
+    const input = screen.getByLabelText("Group name");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Personal{enter}");
+    expect(api.renameGroup).toHaveBeenCalledWith(1, "Personal");
+    expect(await screen.findByRole("region", { name: "Group Personal" })).toBeInTheDocument();
+  });
+
+  it("shows why a group could not be created", async () => {
+    vi.mocked(api.createGroup).mockRejectedValue(new Error("You already have a group named DEFAULT"));
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Roadmap" });
+    await userEvent.click(screen.getByRole("button", { name: /new group/i }));
+    await userEvent.type(screen.getByLabelText("New group name"), "DEFAULT{enter}");
+    expect(await screen.findByRole("alert")).toHaveTextContent("You already have a group named DEFAULT");
+  });
+
+  it("collapses and expands a group, remembering it for the session", async () => {
+    const { unmount } = renderWorkspace();
+    await screen.findByRole("heading", { name: "Roadmap" });
+    const header = screen.getByRole("button", { name: "DEFAULT" });
+    expect(header).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(header);
+    expect(header).toHaveAttribute("aria-expanded", "false");
+    expect(within(boardNav()).queryByRole("button", { name: "Roadmap" })).not.toBeInTheDocument();
+    // The open board stays open while its group is collapsed.
+    expect(screen.getByRole("heading", { name: "Roadmap" })).toBeInTheDocument();
+
+    unmount();
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Roadmap" });
+    expect(screen.getByRole("button", { name: "DEFAULT" })).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(screen.getByRole("button", { name: "DEFAULT" }));
+    expect(within(boardNav()).getByRole("button", { name: "Roadmap" })).toBeInTheDocument();
   });
 
   it("shows an empty state when there are no boards", async () => {

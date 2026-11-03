@@ -114,6 +114,37 @@ CREATE INDEX IF NOT EXISTS idx_boards_user_id ON boards(user_id);
 
 ---
 
+### 2.5 `board_groups` and `board_placements` Tables
+
+Each user's own groups, and where that user has placed the boards they can access. Both were added without changing any existing table.
+
+```sql
+CREATE TABLE IF NOT EXISTS board_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, name),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS board_placements (
+    user_id INTEGER NOT NULL,
+    board_id INTEGER NOT NULL,
+    group_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, board_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id) REFERENCES board_groups(id) ON DELETE CASCADE
+);
+```
+
+- A user's oldest group (lowest `id`) is their default, created as `DEFAULT` and renamable. A board with no placement row is in the default group, so existing and newly shared boards need no row.
+- Moving a board writes only `board_placements`; `boards.data`, `version` and `updated_at` are untouched.
+- Leaving a shared board removes that user's placement. Groups cannot be deleted.
+
+---
+
 ## 3. JSON `data` Schema (`BoardData`)
 
 The `data` column stores valid JSON adhering to the following structure:
@@ -206,7 +237,7 @@ Older boards without the newer card fields load unchanged; they default to null 
 ## 4. Initialization & Seed Data
 
 On application startup, `init_db()` runs `CREATE TABLE IF NOT EXISTS` and seeds only what is missing:
-1. Creates tables and indexes (adds `sessions` and `board_members` to older databases) and adds `boards.version` if missing.
+1. Creates tables and indexes (adds `sessions` and `board_members` to older databases) adds `boards.version` if missing, and gives every user without a group a `DEFAULT` group.
 2. Rehashes any legacy plaintext password.
 3. If the `user` account does not exist, creates it (password `password`) with the `Kanban Studio` board: 5 columns (`col-backlog`, `col-discovery`, `col-progress`, `col-review`, `col-done`) and 8 cards.
 
@@ -223,5 +254,6 @@ A user can access a board they own or are a member of (`ACCESSIBLE_BOARDS` query
 - `PUT /api/boards/{id}`: body `{version, data}`; validates `BoardData` and assignees, then writes only if `version` still matches and returns the new version (409 otherwise).
 - `PATCH /api/boards/{id}`: updates `title` and `updated_at`.
 - `DELETE /api/boards/{id}`: deletes the row.
+- `GET/POST /api/groups`, `PATCH /api/groups/{id}`: read and change the caller's `board_groups`. `PUT /api/boards/{id}/group`: writes the caller's `board_placements` row.
 - `GET/POST/DELETE /api/boards/{id}/members...`: read and change `board_members`.
 - `DELETE /api/auth/me`: deletes the user; their boards, memberships and sessions go with it via `ON DELETE CASCADE` (`PRAGMA foreign_keys = ON` is set on every connection).

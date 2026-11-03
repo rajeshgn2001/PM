@@ -12,6 +12,7 @@ DEFAULT_DB_PATH = Path(__file__).resolve().parent / "kanban.db"
 DEMO_USERNAME = "user"
 DEMO_PASSWORD = "password"
 DEFAULT_BOARD_TITLE = "Kanban Studio"
+DEFAULT_GROUP_NAME = "DEFAULT"
 
 INITIAL_BOARD_DATA = {
     "columns": [
@@ -112,6 +113,27 @@ CREATE TABLE IF NOT EXISTS board_members (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_board_members_user_id ON board_members(user_id);
+
+CREATE TABLE IF NOT EXISTS board_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (user_id, name),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS board_placements (
+    user_id INTEGER NOT NULL,
+    board_id INTEGER NOT NULL,
+    group_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, board_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+    FOREIGN KEY (group_id) REFERENCES board_groups(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_board_placements_board_id ON board_placements(board_id);
+CREATE INDEX IF NOT EXISTS idx_board_placements_group_id ON board_placements(group_id);
 """
 
 
@@ -156,6 +178,15 @@ def init_db():
                 "UPDATE users SET password_hash = ? WHERE id = ?",
                 (hash_password(row["password_hash"]), row["id"]),
             )
+        # Users from before groups existed get a default group, which holds all their boards.
+        conn.execute(
+            """
+            INSERT INTO board_groups (user_id, name)
+            SELECT u.id, ? FROM users u
+            WHERE NOT EXISTS (SELECT 1 FROM board_groups g WHERE g.user_id = u.id)
+            """,
+            (DEFAULT_GROUP_NAME,),
+        )
         if not conn.execute("SELECT 1 FROM users WHERE username = ?", (DEMO_USERNAME,)).fetchone():
             user_id = _insert_user(conn, DEMO_USERNAME, DEMO_PASSWORD)
             _insert_board(conn, user_id, DEFAULT_BOARD_TITLE, INITIAL_BOARD_DATA)
@@ -166,6 +197,7 @@ def _insert_user(conn: sqlite3.Connection, username: str, password: str) -> int:
         "INSERT INTO users (username, password_hash) VALUES (?, ?)",
         (username, hash_password(password)),
     )
+    conn.execute("INSERT INTO board_groups (user_id, name) VALUES (?, ?)", (cursor.lastrowid, DEFAULT_GROUP_NAME))
     return cursor.lastrowid
 
 
@@ -252,7 +284,10 @@ WHERE (b.user_id = :user_id
 def list_boards(user_id: int) -> list[dict]:
     with connect() as conn:
         rows = conn.execute(ACCESSIBLE_BOARDS + " ORDER BY b.id", {"user_id": user_id}).fetchall()
-    return [_board_summary(row) for row in rows]
+        default_group = conn.execute("SELECT MIN(id) FROM board_groups WHERE user_id = ?", (user_id,)).fetchone()[0]
+        placements = conn.execute("SELECT board_id, group_id FROM board_placements WHERE user_id = ?", (user_id,))
+        group_of = {row["board_id"]: row["group_id"] for row in placements}
+    return [{**_board_summary(row), "group_id": group_of.get(row["id"], default_group)} for row in rows]
 
 
 def _board_summary(row: sqlite3.Row) -> dict:
@@ -320,6 +355,53 @@ def delete_board(board_id: int):
         conn.execute("DELETE FROM boards WHERE id = ?", (board_id,))
 
 
+# Board groups. Each user organizes the boards they can access into their own groups.
+# A user's oldest group is their default: it holds every board they have not placed elsewhere.
+
+
+def list_groups(user_id: int) -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute("SELECT id, name FROM board_groups WHERE user_id = ? ORDER BY id", (user_id,)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def create_group(user_id: int, name: str) -> dict | None:
+    """Returns None if the user already has a group with this name."""
+    try:
+        with connect() as conn:
+            cursor = conn.execute("INSERT INTO board_groups (user_id, name) VALUES (?, ?)", (user_id, name))
+            return {"id": cursor.lastrowid, "name": name}
+    except sqlite3.IntegrityError:
+        return None
+
+
+def rename_group(user_id: int, group_id: int, name: str) -> str:
+    """Returns "renamed", "unknown" (not this user's group) or "exists" (name already used)."""
+    try:
+        with connect() as conn:
+            cursor = conn.execute(
+                "UPDATE board_groups SET name = ? WHERE id = ? AND user_id = ?", (name, group_id, user_id)
+            )
+    except sqlite3.IntegrityError:
+        return "exists"
+    return "renamed" if cursor.rowcount == 1 else "unknown"
+
+
+def move_board_to_group(user_id: int, board_id: int, group_id: int) -> bool:
+    """Places an already-checked board in the user's group. False if the group is not theirs."""
+    with connect() as conn:
+        if not conn.execute("SELECT 1 FROM board_groups WHERE id = ? AND user_id = ?", (group_id, user_id)).fetchone():
+            return False
+        conn.execute(
+            """
+            INSERT INTO board_placements (user_id, board_id, group_id) VALUES (?, ?, ?)
+            ON CONFLICT (user_id, board_id) DO UPDATE SET group_id = excluded.group_id
+            """,
+            (user_id, board_id, group_id),
+        )
+    return True
+
+
 # Board members
 
 
@@ -366,6 +448,10 @@ def remove_member(board_id: int, username: str) -> bool:
         )
         if cursor.rowcount == 0:
             return False
+        conn.execute(
+            "DELETE FROM board_placements WHERE board_id = ? AND user_id = (SELECT id FROM users WHERE username = ?)",
+            (board_id, username),
+        )
         _unassign(conn, board_id, username)
     return True
 

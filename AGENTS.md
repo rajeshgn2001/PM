@@ -5,6 +5,7 @@
 This project is building a Project Management App. Key features:
 - People can create an account, sign in and out, change their password, and delete their account
 - Each user has any number of Kanban boards (create, rename, switch, delete)
+- Each user organizes the boards they can access into their own named groups: boards start in the DEFAULT group, groups can be created and renamed, boards are moved between groups by dragging, and groups collapse and expand with a click
 - The owner can share a board with other users by username; members can edit it and leave it, only the owner can rename, delete or manage members. Concurrent edits never silently overwrite each other (a stale save is rejected and the client reloads), and shared boards pick up teammates' changes while idle
 - Columns can be added, renamed and deleted
 - Cards can be added, moved with drag and drop, edited (in a card dialog) and deleted; a card has a title, details, an optional priority (low / medium / high), due date and assignee (a board member), labels, and a checklist

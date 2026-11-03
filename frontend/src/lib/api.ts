@@ -25,6 +25,12 @@ export type BoardSummary = {
   updated_at: string;
   card_count: number;
   open_card_count: number;
+  group_id: number;
+};
+
+export type BoardGroup = {
+  id: number;
+  name: string;
 };
 
 export type Board = {
@@ -94,6 +100,16 @@ export const renameBoard = (boardId: number, title: string) =>
 
 export const deleteBoard = (boardId: number) =>
   request<void>(`/api/boards/${boardId}`, "DELETE");
+
+export const listGroups = () => request<BoardGroup[]>("/api/groups");
+
+export const createGroup = (name: string) => request<BoardGroup>("/api/groups", "POST", { name });
+
+export const renameGroup = (groupId: number, name: string) =>
+  request<BoardGroup>(`/api/groups/${groupId}`, "PATCH", { name });
+
+export const moveBoardToGroup = (boardId: number, groupId: number) =>
+  request<void>(`/api/boards/${boardId}/group`, "PUT", { group_id: groupId });
 
 export const listMembers = (boardId: number) => request<Member[]>(`/api/boards/${boardId}/members`);
 

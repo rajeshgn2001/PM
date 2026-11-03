@@ -386,3 +386,67 @@ test("sharing with an unknown user explains the problem", async ({ page }) => {
   await page.getByRole("button", { name: /invite/i }).click();
   await expect(page.getByText("No user named no-such-user-xyz")).toBeVisible();
 });
+
+test("organizes boards into groups by dragging, and keeps them after a reload", async ({ page }) => {
+  await registerNewUser(page);
+  const group = (name: string) => page.getByRole("region", { name: `Group ${name}` });
+  await expect(group("DEFAULT").getByRole("button", { name: "My First Board", exact: true })).toBeVisible();
+
+  await boardNav(page).getByRole("button", { name: /new group/i }).click();
+  await page.getByLabel("New group name").fill("Work");
+  await page.getByLabel("New group name").press("Enter");
+  await expect(group("Work")).toBeVisible();
+
+  const row = group("DEFAULT").getByRole("button", { name: "My First Board", exact: true });
+  const rowBox = await row.boundingBox();
+  const targetBox = await group("Work").boundingBox();
+  if (!rowBox || !targetBox) {
+    throw new Error("Unable to resolve drag coordinates.");
+  }
+  await page.mouse.move(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await expect(group("Work").getByRole("button", { name: "My First Board", exact: true })).toBeVisible();
+  await expect(group("DEFAULT").getByRole("button", { name: "My First Board", exact: true })).toHaveCount(0);
+
+  await boardNav(page).getByRole("button", { name: "Rename group DEFAULT", exact: true }).click();
+  await page.getByLabel("Group name").fill("Personal");
+  await page.getByLabel("Group name").press("Enter");
+  await expect(group("Personal")).toBeVisible();
+
+  await page.reload();
+  await expect(group("Work").getByRole("button", { name: "My First Board", exact: true })).toBeVisible();
+  await expect(group("Personal")).toBeVisible();
+
+  // Collapsing hides the group's boards and clicking again brings them back.
+  await boardNav(page).getByRole("button", { name: "Work", exact: true }).click();
+  await expect(boardButton(page, "My First Board")).toHaveCount(0);
+  await boardNav(page).getByRole("button", { name: "Work", exact: true }).click();
+  await expect(boardButton(page, "My First Board")).toBeVisible();
+});
+
+test("returns a board to its group and explains when a move fails", async ({ page }) => {
+  await registerNewUser(page);
+  const group = (name: string) => page.getByRole("region", { name: `Group ${name}` });
+  await boardNav(page).getByRole("button", { name: /new group/i }).click();
+  await page.getByLabel("New group name").fill("Work");
+  await page.getByLabel("New group name").press("Enter");
+  await expect(group("Work")).toBeVisible();
+  await page.route("**/api/boards/*/group", (route) =>
+    route.fulfill({ status: 404, contentType: "application/json", body: '{"detail":"Group not found"}' })
+  );
+
+  const rowBox = await group("DEFAULT").getByRole("button", { name: "My First Board", exact: true }).boundingBox();
+  const targetBox = await group("Work").boundingBox();
+  if (!rowBox || !targetBox) {
+    throw new Error("Unable to resolve drag coordinates.");
+  }
+  await page.mouse.move(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
+  await page.mouse.up();
+
+  await expect(boardNav(page).getByRole("alert")).toHaveText("Group not found");
+  await expect(group("DEFAULT").getByRole("button", { name: "My First Board", exact: true })).toBeVisible();
+});

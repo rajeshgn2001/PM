@@ -98,6 +98,7 @@ class BoardSummary(BaseModel):
     updated_at: str
     card_count: int
     open_card_count: int
+    group_id: int
 
 
 class Board(BaseModel):
@@ -116,6 +117,19 @@ class BoardSave(BaseModel):
 
 class SaveResult(BaseModel):
     version: int
+
+
+class GroupName(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+
+
+class Group(BaseModel):
+    id: int
+    name: str
+
+
+class BoardMove(BaseModel):
+    group_id: int
 
 
 class MemberAdd(BaseModel):

@@ -306,3 +306,19 @@ Make boards collaborative and cards complete enough for real project work, witho
 - Frontend unit: 100 passed, 97.7% statement coverage. Lint, typecheck and build clean.
 - Playwright: 17 passed, twice, the second time on a fresh container.
 - Live: the AI created an assigned card with labels and a checklist on a shared board, and resolved "me" to the signed-in user; an MVP-era database migrates (version column, members table) and saves.
+
+
+## Part 13: Board Groups
+
+### Objective
+Organize boards into named groups, without changing or losing any existing data.
+
+### Checklist
+- [x] `board_groups` and `board_placements` tables, added by `init_db()`; existing tables unchanged.
+- [x] Every user gets a `DEFAULT` group holding all boards not placed elsewhere.
+- [x] Create and rename groups; drag a board between groups; collapse and expand groups.
+- [x] Groups are personal, including for shared boards.
+
+### Verification (2026-11-03)
+- Backend: 83 passed, 99% coverage. Frontend unit: 106 passed. Playwright: 19 passed. Lint, typecheck and build clean.
+- A copy of the live database migrated with every existing row unchanged, and a board was dragged between groups on it.

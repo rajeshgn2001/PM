@@ -78,6 +78,12 @@ export const CalendarIcon = () => (
   </Icon>
 );
 
+export const ChevronIcon = () => (
+  <Icon>
+    <path d="m6 9 6 6 6-6" />
+  </Icon>
+);
+
 export const BoardIcon = () => (
   <Icon>
     <rect x="3" y="4" width="18" height="16" rx="2" />

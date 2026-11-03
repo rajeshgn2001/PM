@@ -17,11 +17,14 @@ from models import (
     Board,
     BoardCreate,
     BoardData,
+    BoardMove,
     BoardSave,
     BoardSummary,
     ChatRequest,
     ChatResponse,
     Credentials,
+    Group,
+    GroupName,
     LoginRequest,
     Member,
     MemberAdd,
@@ -178,6 +181,38 @@ async def rename_board(update: BoardCreate, board: OwnedBoard, user: CurrentUser
 @app.delete("/api/boards/{board_id}", status_code=204)
 async def delete_board(board: OwnedBoard):
     db.delete_board(board["id"])
+
+
+# Board groups
+
+
+@app.get("/api/groups", response_model=list[Group])
+async def list_groups(user: CurrentUser):
+    return db.list_groups(user["id"])
+
+
+@app.post("/api/groups", response_model=Group, status_code=201)
+async def create_group(group: GroupName, user: CurrentUser):
+    created = db.create_group(user["id"], group.name)
+    if not created:
+        raise HTTPException(status_code=409, detail=f"You already have a group named {group.name}")
+    return created
+
+
+@app.patch("/api/groups/{group_id}", response_model=Group)
+async def rename_group(group_id: int, group: GroupName, user: CurrentUser):
+    result = db.rename_group(user["id"], group_id, group.name)
+    if result == "unknown":
+        raise HTTPException(status_code=404, detail="Group not found")
+    if result == "exists":
+        raise HTTPException(status_code=409, detail=f"You already have a group named {group.name}")
+    return Group(id=group_id, name=group.name)
+
+
+@app.put("/api/boards/{board_id}/group", status_code=204)
+async def move_board(move: BoardMove, board: AccessibleBoard, user: CurrentUser):
+    if not db.move_board_to_group(user["id"], board["id"], move.group_id):
+        raise HTTPException(status_code=404, detail="Group not found")
 
 
 # Sharing
