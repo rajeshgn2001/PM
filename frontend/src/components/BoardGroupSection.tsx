@@ -39,8 +39,8 @@ export const BoardGroupSection = ({
       aria-label={`Group ${group.name}`}
       className={clsx(
         "flex flex-col rounded-xl transition",
-        // Groups share the sidebar's height and scroll on their own; each keeps room for its header and a board.
-        isCollapsed || boardCount === 0 ? "shrink-0" : "min-h-[4.75rem]",
+        // When the sidebar runs short of height, only longer groups give up space, keeping room for a board.
+        !isCollapsed && boardCount > 3 ? "min-h-[4.75rem]" : "shrink-0",
         isOver && "bg-[var(--accent-yellow)]/15 ring-1 ring-[var(--accent-yellow)]"
       )}
     >
@@ -63,12 +63,12 @@ export const BoardGroupSection = ({
             onClick={onToggle}
             aria-expanded={!isCollapsed}
             aria-label={group.name}
-            className="flex min-w-0 flex-1 items-center gap-1 px-1 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wider hover:text-[var(--navy-dark)]"
+            className="flex min-w-0 flex-1 items-center gap-1 px-1 py-1.5 text-left text-xs uppercase tracking-wider"
           >
             <span className={clsx("shrink-0 transition-transform", isCollapsed && "-rotate-90")}>
               <ChevronIcon />
             </span>
-            <span className="min-w-0 truncate">{group.name}</span>
+            <span className="min-w-0 truncate font-bold text-[var(--navy-dark)]">{group.name}</span>
             <span className="shrink-0 font-medium">({boardCount})</span>
           </button>
           <button
@@ -83,7 +83,11 @@ export const BoardGroupSection = ({
         </div>
       )}
       {!isCollapsed && (
-        <div data-testid={`group-boards-${group.id}`} className="flex min-h-0 flex-col gap-1 overflow-y-auto pb-1 pr-1">
+        // At most 10 boards tall: 10 rows of 2.25rem, 9 gaps and the bottom padding.
+        <div
+          data-testid={`group-boards-${group.id}`}
+          className="flex max-h-[25rem] min-h-0 flex-col gap-1 overflow-y-auto pb-1 pr-1"
+        >
           {children}
         </div>
       )}

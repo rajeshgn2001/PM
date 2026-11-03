@@ -608,3 +608,66 @@ test.describe("in a window shorter than the page", () => {
     await expect(group.getByRole("button", { name: "Board 2", exact: true })).toBeVisible();
   });
 });
+
+test.describe("in a tall window", () => {
+  test.use({ viewport: { width: 1366, height: 1100 } });
+
+  // How many of the group's boards are fully visible without scrolling.
+  const visibleBoards = (page: Page, name: string) =>
+    page
+      .getByRole("region", { name: `Group ${name}` })
+      .locator('[data-testid^="group-boards-"]')
+      .evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return [...element.children].filter((row) => {
+          const rowBox = row.getBoundingClientRect();
+          return rowBox.top >= box.top && rowBox.bottom <= box.bottom;
+        }).length;
+      });
+
+  test("a group fits its boards up to 10, and collapsing gives the others room", async ({ page }) => {
+    await registerNewUser(page);
+    await page.evaluate(async () => {
+      const headers = {
+        Authorization: `Bearer ${sessionStorage.getItem("kanban_auth_token")}`,
+        "Content-Type": "application/json",
+      };
+      const post = (path: string, body: unknown) =>
+        fetch(path, { method: "POST", headers, body: JSON.stringify(body) }).then((response) => response.json());
+      const place = (boardId: number, groupId: number) =>
+        fetch(`/api/boards/${boardId}/group`, { method: "PUT", headers, body: JSON.stringify({ group_id: groupId }) });
+      for (let i = 1; i <= 14; i++) {
+        await post("/api/boards", { title: `Board ${i}` });
+      }
+      const small = await post("/api/groups", { name: "Small" });
+      for (let i = 1; i <= 3; i++) {
+        await place((await post("/api/boards", { title: `Small ${i}` })).id, small.id);
+      }
+      const large = await post("/api/groups", { name: "Large" });
+      for (let i = 1; i <= 14; i++) {
+        await place((await post("/api/boards", { title: `Large ${i}` })).id, large.id);
+      }
+    });
+    await page.reload();
+    await expect(page.getByRole("region", { name: "Group Large" })).toBeVisible();
+    const toggle = (name: string) => boardNav(page).getByRole("button", { name, exact: true });
+
+    // The small group always shows all its boards.
+    expect(await visibleBoards(page, "Small")).toBe(3);
+
+    // With the other long group collapsed, a long group shows exactly 10.
+    await toggle("DEFAULT").click();
+    expect(await visibleBoards(page, "Large")).toBe(10);
+    expect(await visibleBoards(page, "Small")).toBe(3);
+
+    await toggle("Large").click();
+    await toggle("DEFAULT").click();
+    expect(await visibleBoards(page, "DEFAULT")).toBe(10);
+    await boardButton(page, "Board 14").scrollIntoViewIfNeeded();
+    await expect(boardButton(page, "Board 14")).toBeInViewport();
+
+    // Group names are bold.
+    const weight = await toggle("DEFAULT").getByText("DEFAULT").evaluate((name) => getComputedStyle(name).fontWeight);
+    expect(weight).toBe("700");
+  });
+});
