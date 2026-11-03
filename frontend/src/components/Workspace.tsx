@@ -5,8 +5,9 @@ import { createPortal } from "react-dom";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
   pointerWithin,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -57,8 +58,12 @@ export const Workspace = ({ username, onLogout }: WorkspaceProps) => {
   const [draggingId, setDraggingId] = useState<number | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 6 },
+    }),
+    // A long press, so that swiping can still scroll a group's boards on a touch screen.
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 8 },
     })
   );
 
@@ -301,6 +306,8 @@ export const Workspace = ({ username, onLogout }: WorkspaceProps) => {
               <DndContext
                 sensors={sensors}
                 collisionDetection={pointerWithin}
+                // Only the sidebar may scroll: scrolling the page would slide the groups out from under the pointer.
+                autoScroll={{ canScroll: (element) => element.closest("nav") !== null }}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 onDragCancel={() => setDraggingId(null)}

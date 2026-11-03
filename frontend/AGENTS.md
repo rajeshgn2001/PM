@@ -65,7 +65,7 @@ Colors mapped to the project guidelines:
 
 - Sign in or create an account; the session token is kept in sessionStorage (survives reloads, cleared when the tab closes) and sent as a Bearer header by `api.ts`. Any 401 clears it and returns to the sign-in form.
 - The workspace lists owned and shared boards (shared ones show "Shared by <owner>"); the selected board is remembered for the session. Owners can create, rename and delete boards.
-- Boards are listed under the user's groups. New boards go to the default group; "New group" adds one; the pencil on a group renames it; dragging a board onto a group moves it (rolled back with an error if the save fails); clicking a group header collapses it, remembered for the session.
+- Boards are listed under the user's groups. New boards go to the default group; "New group" adds one; the pencil on a group renames it; dragging a board onto a group moves it (rolled back with an error if the save fails); clicking a group header collapses it, remembered for the session. Groups share the sidebar height and each scrolls on its own. Touch screens drag with a long press.
 - Share / Members button opens `ShareDialog`; after a membership change the board reloads (removing a member unassigns their cards on the server).
 - A board loads from `GET /api/boards/{id}`; a loading state, or an error with Retry, is shown until it loads.
 - Drag and drop, column add/rename/delete, card add/edit (in `CardDialog`)/delete; each change is saved with a debounced `PUT /api/boards/{id}` carrying the last known version. A 409 reloads the board and shows a notice; other failures show "Sync error".

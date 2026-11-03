@@ -37,10 +37,15 @@ export const BoardGroupSection = ({
     <section
       ref={setNodeRef}
       aria-label={`Group ${group.name}`}
-      className={clsx("rounded-xl transition", isOver && "bg-[var(--accent-yellow)]/15 ring-1 ring-[var(--accent-yellow)]")}
+      className={clsx(
+        "flex flex-col rounded-xl transition",
+        // Groups share the sidebar's height and scroll on their own; each keeps room for its header and a board.
+        isCollapsed || boardCount === 0 ? "shrink-0" : "min-h-[4.75rem]",
+        isOver && "bg-[var(--accent-yellow)]/15 ring-1 ring-[var(--accent-yellow)]"
+      )}
     >
       {renamingName !== null ? (
-        <form onSubmit={onRenameSubmit} className="p-1">
+        <form onSubmit={onRenameSubmit} className="shrink-0 p-1">
           <input
             autoFocus
             value={renamingName}
@@ -52,7 +57,7 @@ export const BoardGroupSection = ({
           />
         </form>
       ) : (
-        <div className="group flex items-center gap-1 pr-1 text-[var(--gray-text)]">
+        <div className="group flex shrink-0 items-center gap-1 pr-1 text-[var(--gray-text)]">
           <button
             type="button"
             onClick={onToggle}
@@ -77,7 +82,11 @@ export const BoardGroupSection = ({
           </button>
         </div>
       )}
-      {!isCollapsed && <div className="flex flex-col gap-1 pb-1">{children}</div>}
+      {!isCollapsed && (
+        <div data-testid={`group-boards-${group.id}`} className="flex min-h-0 flex-col gap-1 overflow-y-auto pb-1 pr-1">
+          {children}
+        </div>
+      )}
     </section>
   );
 };

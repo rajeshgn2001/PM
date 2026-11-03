@@ -450,3 +450,161 @@ test("returns a board to its group and explains when a move fails", async ({ pag
   await expect(boardNav(page).getByRole("alert")).toHaveText("Group not found");
   await expect(group("DEFAULT").getByRole("button", { name: "My First Board", exact: true })).toBeVisible();
 });
+
+test.describe("with more boards than the sidebar can show", () => {
+  test.use({ viewport: { width: 1366, height: 768 } });
+
+  const group = (page: Page, name: string) => page.getByRole("region", { name: `Group ${name}` });
+  const boardsOf = (page: Page, name: string) => group(page, name).locator('[data-testid^="group-boards-"]');
+
+  // Registers a user with many boards in DEFAULT, plus a second group holding one board.
+  const setUp = async (page: Page) => {
+    await registerNewUser(page);
+    await page.evaluate(async () => {
+      const headers = {
+        Authorization: `Bearer ${sessionStorage.getItem("kanban_auth_token")}`,
+        "Content-Type": "application/json",
+      };
+      const post = (path: string, body: unknown) =>
+        fetch(path, { method: "POST", headers, body: JSON.stringify(body) }).then((response) => response.json());
+      for (let i = 1; i <= 20; i++) {
+        await post("/api/boards", { title: `Board ${i}` });
+      }
+      const work = await post("/api/groups", { name: "Work" });
+      const parked = await post("/api/boards", { title: "Parked" });
+      await fetch(`/api/boards/${parked.id}/group`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ group_id: work.id }),
+      });
+    });
+    await page.reload();
+    await expect(group(page, "Work")).toBeVisible();
+  };
+
+  test("each group scrolls on its own and every group stays in view", async ({ page }) => {
+    await setUp(page);
+    await expect(boardNav(page).getByRole("button", { name: "DEFAULT", exact: true })).toBeInViewport();
+    await expect(boardNav(page).getByRole("button", { name: "Work", exact: true })).toBeInViewport();
+    await expect(boardButton(page, "Parked")).toBeInViewport();
+    await expect(boardNav(page).getByRole("button", { name: /new group/i })).toBeInViewport();
+
+    const overflows = (locator: ReturnType<typeof boardsOf>) =>
+      locator.evaluate((element) => element.scrollHeight > element.clientHeight);
+    expect(await overflows(boardsOf(page, "DEFAULT"))).toBe(true);
+    expect(await overflows(boardsOf(page, "Work"))).toBe(false);
+    // Nothing is left for a shared scrollbar to do.
+    const list = boardsOf(page, "DEFAULT").locator("xpath=../..");
+    expect(await overflows(list)).toBe(false);
+
+    // Scrolling one group leaves the other where it was.
+    const workTop = (await group(page, "Work").boundingBox())?.y;
+    await boardButton(page, "Board 20").scrollIntoViewIfNeeded();
+    await expect(boardButton(page, "Board 20")).toBeInViewport();
+    expect((await group(page, "Work").boundingBox())?.y).toBe(workTop);
+  });
+
+  test("moves a board pulled from far down a long group, and back up", async ({ page }) => {
+    await setUp(page);
+    const pull = async (title: string, target: string) => {
+      const row = boardButton(page, title);
+      await row.scrollIntoViewIfNeeded();
+      const rowBox = await row.boundingBox();
+      const targetBox = await group(page, target).boundingBox();
+      if (!rowBox || !targetBox) {
+        throw new Error("Unable to resolve drag coordinates.");
+      }
+      await page.mouse.move(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + 10, { steps: 12 });
+      await page.mouse.up();
+      await expect(group(page, target).getByRole("button", { name: title, exact: true })).toHaveCount(1);
+    };
+
+    await pull("Board 18", "Work");
+    await pull("Parked", "DEFAULT");
+    await page.reload();
+    await expect(group(page, "Work").getByRole("button", { name: "Board 18", exact: true })).toHaveCount(1);
+    await expect(group(page, "DEFAULT").getByRole("button", { name: "Parked", exact: true })).toHaveCount(1);
+  });
+});
+
+test.describe("on a touch screen", () => {
+  test.use({ hasTouch: true });
+
+  test("moves a board with a long press and pull", async ({ page }) => {
+    await registerNewUser(page);
+    const group = (name: string) => page.getByRole("region", { name: `Group ${name}` });
+    await boardNav(page).getByRole("button", { name: /new group/i }).click();
+    await page.getByLabel("New group name").fill("Work");
+    await page.getByLabel("New group name").press("Enter");
+    await expect(group("Work")).toBeVisible();
+
+    const rowBox = await boardButton(page, "My First Board").boundingBox();
+    const targetBox = await group("Work").boundingBox();
+    if (!rowBox || !targetBox) {
+      throw new Error("Unable to resolve drag coordinates.");
+    }
+    const from = { x: rowBox.x + rowBox.width / 2, y: rowBox.y + rowBox.height / 2 };
+    const to = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type: "touchStart" | "touchMove" | "touchEnd", points: { x: number; y: number }[]) =>
+      cdp.send("Input.dispatchTouchEvent", { type, touchPoints: points });
+
+    await touch("touchStart", [from]);
+    await page.waitForTimeout(400);
+    for (let step = 1; step <= 10; step++) {
+      await touch("touchMove", [
+        { x: from.x + ((to.x - from.x) * step) / 10, y: from.y + ((to.y - from.y) * step) / 10 },
+      ]);
+    }
+    await touch("touchEnd", []);
+    await expect(group("Work").getByRole("button", { name: "My First Board", exact: true })).toBeVisible();
+  });
+});
+
+test.describe("in a window shorter than the page", () => {
+  test.use({ viewport: { width: 1366, height: 768 } });
+
+  test("keeps the page still during a pull, so a small empty group can be hit", async ({ page }) => {
+    await registerNewUser(page);
+    // A tall board makes the page scrollable, and many boards fill the group being pulled from.
+    await page.evaluate(async () => {
+      const headers = {
+        Authorization: `Bearer ${sessionStorage.getItem("kanban_auth_token")}`,
+        "Content-Type": "application/json",
+      };
+      const boards = await fetch("/api/boards", { headers }).then((response) => response.json());
+      const current = await fetch(`/api/boards/${boards[0].id}`, { headers }).then((response) => response.json());
+      const ids = Array.from({ length: 12 }, (_, i) => `card-${i}`);
+      current.data.columns[0].cardIds = ids;
+      current.data.cards = Object.fromEntries(ids.map((id) => [id, { id, title: id, details: "" }]));
+      await fetch(`/api/boards/${current.id}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({ version: current.version, data: current.data }),
+      });
+      for (let i = 1; i <= 16; i++) {
+        await fetch("/api/boards", { method: "POST", headers, body: JSON.stringify({ title: `Board ${i}` }) });
+      }
+      await fetch("/api/groups", { method: "POST", headers, body: JSON.stringify({ name: "Work" }) });
+    });
+    await page.reload();
+    const group = page.getByRole("region", { name: "Group Work" });
+    await expect(group).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight)).toBe(true);
+
+    const rowBox = await boardButton(page, "Board 2").boundingBox();
+    const targetBox = await group.boundingBox();
+    if (!rowBox || !targetBox) {
+      throw new Error("Unable to resolve drag coordinates.");
+    }
+    await page.mouse.move(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    await page.mouse.up();
+    await expect(group.getByRole("button", { name: "Board 2", exact: true })).toBeVisible();
+  });
+});
