@@ -24,6 +24,7 @@ export type BoardSummary = {
   created_at: string;
   updated_at: string;
   card_count: number;
+  open_card_count: number;
 };
 
 export type Board = {

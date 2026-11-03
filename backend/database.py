@@ -252,18 +252,23 @@ WHERE (b.user_id = :user_id
 def list_boards(user_id: int) -> list[dict]:
     with connect() as conn:
         rows = conn.execute(ACCESSIBLE_BOARDS + " ORDER BY b.id", {"user_id": user_id}).fetchall()
-    return [
-        {
-            "id": row["id"],
-            "title": row["title"],
-            "role": row["role"],
-            "owner": row["owner"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-            "card_count": len(json.loads(row["data"])["cards"]),
-        }
-        for row in rows
-    ]
+    return [_board_summary(row) for row in rows]
+
+
+def _board_summary(row: sqlite3.Row) -> dict:
+    data = json.loads(row["data"])
+    done = len(data["columns"][-1]["cardIds"])
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "role": row["role"],
+        "owner": row["owner"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "card_count": len(data["cards"]),
+        # Cards not in the last column, which counts as done.
+        "open_card_count": len(data["cards"]) - done,
+    }
 
 
 def create_board(user_id: int, title: str, data: dict = EMPTY_BOARD_DATA) -> dict:

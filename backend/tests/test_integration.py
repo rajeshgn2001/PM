@@ -35,7 +35,10 @@ async def test_full_project_workflow(client, monkeypatch):
     await client.post("/api/auth/logout", headers=alice)
     alice = await sign_in(client, "alice", "alice-pass")
     boards = (await client.get("/api/boards", headers=alice)).json()
-    assert [(b["title"], b["card_count"]) for b in boards] == [("My First Board", 0), ("Sprint 1 (active)", 1)]
+    assert [(b["title"], b["card_count"], b["open_card_count"]) for b in boards] == [
+        ("My First Board", 0, 0),
+        ("Sprint 1 (active)", 1, 0),
+    ]
     saved = (await client.get(f"/api/boards/{sprint['id']}", headers=alice)).json()["data"]
     assert saved["columns"][-1]["cardIds"] == ["card-a"]
     assert saved["cards"]["card-a"]["dueDate"] == "2026-11-01"

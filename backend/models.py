@@ -97,6 +97,7 @@ class BoardSummary(BaseModel):
     created_at: str
     updated_at: str
     card_count: int
+    open_card_count: int
 
 
 class Board(BaseModel):

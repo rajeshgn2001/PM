@@ -10,7 +10,7 @@ async def test_demo_user_has_seeded_board(client, auth):
     boards = (await client.get("/api/boards", headers=auth)).json()
     assert len(boards) == 1
     assert boards[0]["title"] == "Kanban Studio"
-    assert boards[0]["card_count"] == 8
+    assert (boards[0]["card_count"], boards[0]["open_card_count"]) == (8, 6)
     assert (boards[0]["role"], boards[0]["owner"]) == ("owner", "user")
 
     board = (await client.get(f"/api/boards/{boards[0]['id']}", headers=auth)).json()

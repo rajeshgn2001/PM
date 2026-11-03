@@ -12,7 +12,7 @@ type WorkspaceProps = {
   onLogout: () => void;
 };
 
-type BoardEntry = Pick<BoardSummary, "id" | "title" | "role" | "owner">;
+type BoardEntry = Pick<BoardSummary, "id" | "title" | "role" | "owner" | "open_card_count">;
 
 const SELECTED_KEY = "kanban_selected_board";
 
@@ -67,7 +67,10 @@ export const Workspace = ({ username, onLogout }: WorkspaceProps) => {
     }
     return run(async () => {
       const board = await createBoard(title);
-      setBoards((prev) => [...(prev ?? []), { id: board.id, title: board.title, role: board.role, owner: board.owner }]);
+      setBoards((prev) => [
+        ...(prev ?? []),
+        { id: board.id, title: board.title, role: board.role, owner: board.owner, open_card_count: 0 },
+      ]);
       setNewTitle(null);
       selectBoard(board.id);
     });
@@ -104,6 +107,9 @@ export const Workspace = ({ username, onLogout }: WorkspaceProps) => {
     });
   };
 
+  const setOpenCount = (boardId: number, count: number) =>
+    setBoards((prev) => prev!.map((b) => (b.id === boardId ? { ...b, open_card_count: count } : b)));
+
   const selected = boards?.find((b) => b.id === selectedId);
 
   return (
@@ -127,70 +133,72 @@ export const Workspace = ({ username, onLogout }: WorkspaceProps) => {
                 {error}
               </p>
             )}
-            {boards?.map((board) =>
-              renaming?.id === board.id ? (
-                <form key={board.id} onSubmit={handleRename} className="space-y-2">
-                  <input
-                    autoFocus
-                    value={renaming.title}
-                    onChange={(event) => setRenaming({ id: board.id, title: event.target.value })}
-                    onKeyDown={(event) => event.key === "Escape" && setRenaming(null)}
-                    aria-label="Board name"
-                    maxLength={100}
-                    className={inputClass}
-                  />
-                </form>
-              ) : (
-                <div
-                  key={board.id}
-                  className={clsx(
-                    "group flex items-center gap-1 rounded-xl pr-1 transition",
-                    board.id === selectedId
-                      ? "bg-[var(--primary-blue)]/10 text-[var(--navy-dark)]"
-                      : "text-[var(--gray-text)] hover:bg-[var(--surface)]"
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => selectBoard(board.id)}
-                    aria-current={board.id === selectedId ? "page" : undefined}
-                    className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm font-semibold"
+            <div className="-mr-2 flex max-h-[50vh] flex-col gap-1 overflow-y-auto pr-2 lg:max-h-[calc(100vh-16rem)]">
+              {boards?.map((board) =>
+                renaming?.id === board.id ? (
+                  <form key={board.id} onSubmit={handleRename} className="space-y-2">
+                    <input
+                      autoFocus
+                      value={renaming.title}
+                      onChange={(event) => setRenaming({ id: board.id, title: event.target.value })}
+                      onKeyDown={(event) => event.key === "Escape" && setRenaming(null)}
+                      aria-label="Board name"
+                      maxLength={100}
+                      className={inputClass}
+                    />
+                  </form>
+                ) : (
+                  <div
+                    key={board.id}
+                    className={clsx(
+                      "group flex items-center gap-1 rounded-xl pr-1 transition",
+                      board.id === selectedId ? "bg-[var(--primary-blue)]/10" : "hover:bg-[var(--surface)]",
+                      // Boards with no open cards are greyed out; the rest stand out in navy.
+                      board.open_card_count > 0 ? "text-[var(--navy-dark)]" : "text-[var(--gray-text)]/60"
+                    )}
                   >
-                    <BoardIcon />
-                    <span className="min-w-0">
-                      <span className="block truncate">{board.title}</span>
-                      {board.role === "member" && (
-                        <span className="block truncate text-[11px] font-medium text-[var(--gray-text)]">
-                          Shared by {board.owner}
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                  {board.role === "owner" && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setRenaming({ id: board.id, title: board.title })}
-                        className="rounded-lg p-1 opacity-0 transition hover:text-[var(--primary-blue)] group-hover:opacity-100 group-focus-within:opacity-100"
-                        aria-label={`Rename board ${board.title}`}
-                        title="Rename"
-                      >
-                        <PencilIcon />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(board)}
-                        className="rounded-lg p-1 opacity-0 transition hover:text-red-600 group-hover:opacity-100 group-focus-within:opacity-100"
-                        aria-label={`Delete board ${board.title}`}
-                        title="Delete"
-                      >
-                        <TrashIcon />
-                      </button>
-                    </>
-                  )}
-                </div>
-              )
-            )}
+                    <button
+                      type="button"
+                      onClick={() => selectBoard(board.id)}
+                      aria-current={board.id === selectedId ? "page" : undefined}
+                      className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm font-semibold"
+                    >
+                      <BoardIcon />
+                      <span className="min-w-0">
+                        <span className="block truncate">{board.title}</span>
+                        {board.role === "member" && (
+                          <span className="block truncate text-[11px] font-medium text-[var(--gray-text)]">
+                            Shared by {board.owner}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                    {board.role === "owner" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setRenaming({ id: board.id, title: board.title })}
+                          className="rounded-lg p-1 opacity-0 transition hover:text-[var(--primary-blue)] group-hover:opacity-100 group-focus-within:opacity-100"
+                          aria-label={`Rename board ${board.title}`}
+                          title="Rename"
+                        >
+                          <PencilIcon />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(board)}
+                          className="rounded-lg p-1 opacity-0 transition hover:text-red-600 group-hover:opacity-100 group-focus-within:opacity-100"
+                          aria-label={`Delete board ${board.title}`}
+                          title="Delete"
+                        >
+                          <TrashIcon />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
 
             {newTitle === null ? (
               <button
@@ -268,6 +276,7 @@ export const Workspace = ({ username, onLogout }: WorkspaceProps) => {
               title={selected.title}
               username={username}
               onLeave={() => dropBoard(selected.id)}
+              onOpenCountChange={(count) => setOpenCount(selected.id, count)}
             />
           ) : (
             boards && (

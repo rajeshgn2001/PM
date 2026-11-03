@@ -28,6 +28,7 @@ const summary = (id: number, title: string, role: "owner" | "member" = "owner", 
   created_at: "2026-10-01 10:00:00",
   updated_at: "2026-10-01 10:00:00",
   card_count: 0,
+  open_card_count: 0,
 });
 
 const emptyData = { columns: [{ id: "col-todo", title: "To Do", cardIds: [] }], cards: {} };
@@ -139,6 +140,30 @@ describe("Workspace", () => {
     expect(api.removeMember).toHaveBeenCalledWith(5, "alice");
     expect(await screen.findByRole("heading", { name: "Roadmap" })).toBeInTheDocument();
     expect(within(boardNav()).queryByText("Team plan")).not.toBeInTheDocument();
+  });
+
+  it("greys out boards with no open cards and updates as the board changes", async () => {
+    vi.mocked(api.listBoards).mockResolvedValue([summary(1, "Roadmap"), { ...summary(2, "Sprint"), open_card_count: 3 }]);
+    renderWorkspace();
+    await screen.findByRole("heading", { name: "Roadmap" });
+    const row = (name: string) => within(boardNav()).getByRole("button", { name }).parentElement;
+    expect(row("Roadmap")).toHaveClass("text-[var(--gray-text)]/60");
+    expect(row("Sprint")).toHaveClass("text-[var(--navy-dark)]");
+
+    // Sprint now has its only card in the last (done) column, so it turns grey once loaded.
+    vi.mocked(api.fetchBoard).mockResolvedValue({
+      ...board(2, "Sprint"),
+      data: {
+        columns: [
+          { id: "col-todo", title: "To Do", cardIds: [] },
+          { id: "col-done", title: "Done", cardIds: ["card-1"] },
+        ],
+        cards: { "card-1": { id: "card-1", title: "Ship", details: "" } },
+      },
+    });
+    await userEvent.click(within(boardNav()).getByRole("button", { name: "Sprint" }));
+    await screen.findByRole("heading", { name: "Sprint" });
+    await waitFor(() => expect(row("Sprint")).toHaveClass("text-[var(--gray-text)]/60"));
   });
 
   it("shows an empty state when there are no boards", async () => {

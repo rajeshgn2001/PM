@@ -43,6 +43,7 @@ type KanbanBoardProps = {
   title: string;
   username: string;
   onLeave?: () => void;
+  onOpenCountChange?: (count: number) => void;
 };
 
 // How often a shared board checks for teammates' changes while idle.
@@ -51,7 +52,7 @@ export const POLL_INTERVAL_MS = 10_000;
 const CONFLICT_NOTICE =
   "Someone else changed this board, so your last change was not saved. Showing the latest version.";
 
-export const KanbanBoard = ({ boardId, title, username, onLeave }: KanbanBoardProps) => {
+export const KanbanBoard = ({ boardId, title, username, onLeave, onOpenCountChange }: KanbanBoardProps) => {
   const [board, setBoard] = useState<BoardData | null>(null);
   const [role, setRole] = useState<Role>("owner");
   const [members, setMembers] = useState<Member[]>([]);
@@ -90,6 +91,15 @@ export const KanbanBoard = ({ boardId, title, username, onLeave }: KanbanBoardPr
     // The parent remounts this component (key={boardId}) when the board changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Keeps the sidebar's open-card count in step with the board.
+  useEffect(() => {
+    if (board) {
+      const { total, done } = boardStats(board);
+      onOpenCountChange?.(total - done);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [board]);
 
   useEffect(() => {
     isIdleRef.current = !editingCardId && !isAiBusy && syncStatus === "synced";
