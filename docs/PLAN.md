@@ -318,8 +318,8 @@ Organize boards into named groups, without changing or losing any existing data.
 - [x] Every user gets a `DEFAULT` group holding all boards not placed elsewhere.
 - [x] Create and rename groups; drag a board between groups; collapse and expand groups.
 - [x] Groups are personal, including for shared boards.
-- [x] Each group shows up to 10 boards and scrolls on its own, so every group header stays visible as a drop target.
+- [x] Each group shows up to 10 boards and scrolls on its own, and the page scrolls at the window edge during a pull to reach groups below it.
 
 ### Verification (2026-11-03)
-- Backend: 83 passed, 99% coverage. Frontend unit: 106 passed. Playwright: 24 passed. Lint, typecheck and build clean.
+- Backend: 83 passed, 99% coverage. Frontend unit: 106 passed. Playwright: 25 passed. Lint, typecheck and build clean.
 - A copy of the live database migrated with every existing row unchanged, and a board was dragged between groups on it.

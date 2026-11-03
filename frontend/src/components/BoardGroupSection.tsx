@@ -38,9 +38,7 @@ export const BoardGroupSection = ({
       ref={setNodeRef}
       aria-label={`Group ${group.name}`}
       className={clsx(
-        "flex flex-col rounded-xl transition",
-        // When the sidebar runs short of height, only longer groups give up space, keeping room for a board.
-        !isCollapsed && boardCount > 3 ? "min-h-[4.75rem]" : "shrink-0",
+        "flex shrink-0 flex-col rounded-xl transition",
         isOver && "bg-[var(--accent-yellow)]/15 ring-1 ring-[var(--accent-yellow)]"
       )}
     >
@@ -86,7 +84,7 @@ export const BoardGroupSection = ({
         // At most 10 boards tall: 10 rows of 2.25rem, 9 gaps and the bottom padding.
         <div
           data-testid={`group-boards-${group.id}`}
-          className="flex max-h-[25rem] min-h-0 flex-col gap-1 overflow-y-auto pb-1 pr-1"
+          className="flex max-h-[25rem] flex-col gap-1 overflow-y-auto pb-1 pr-1"
         >
           {children}
         </div>

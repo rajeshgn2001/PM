@@ -671,3 +671,64 @@ test.describe("in a tall window", () => {
     expect(weight).toBe("700");
   });
 });
+
+test.describe("with many groups in a short window", () => {
+  test.use({ viewport: { width: 1366, height: 650 } });
+
+  test("an open group still shows 10 boards, and a group below the window can be reached", async ({ page }) => {
+    await registerNewUser(page);
+    await page.evaluate(async () => {
+      const headers = {
+        Authorization: `Bearer ${sessionStorage.getItem("kanban_auth_token")}`,
+        "Content-Type": "application/json",
+      };
+      const post = (path: string, body: unknown) =>
+        fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
+      for (let i = 1; i <= 15; i++) {
+        await post("/api/boards", { title: `Board ${i}` });
+      }
+      for (let i = 1; i <= 8; i++) {
+        await post("/api/groups", { name: `Team ${i}` });
+      }
+    });
+    await page.reload();
+    const target = page.getByRole("region", { name: "Group Team 8" });
+    await expect(target).toBeAttached();
+
+    const boards = page.getByRole("region", { name: "Group DEFAULT" }).locator('[data-testid^="group-boards-"]');
+    const visible = () =>
+      boards.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return [...element.children].filter((row) => {
+          const rowBox = row.getBoundingClientRect();
+          return rowBox.top >= box.top && rowBox.bottom <= box.bottom;
+        }).length;
+      });
+    expect(await visible()).toBe(10);
+
+    // Clicking the group closed and open again brings back the same 10.
+    const toggle = boardNav(page).getByRole("button", { name: "DEFAULT", exact: true });
+    await toggle.click();
+    await toggle.click();
+    expect(await visible()).toBe(10);
+
+    // Hold at the window's bottom edge until the page has brought the group into view, then drop on it.
+    const rowBox = await boardButton(page, "Board 2").boundingBox();
+    if (!rowBox) {
+      throw new Error("Unable to resolve drag coordinates.");
+    }
+    await page.mouse.move(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(rowBox.x + rowBox.width / 2, 645, { steps: 12 });
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight - window.scrollY))
+      .toBeLessThanOrEqual(1);
+    const targetBox = await target.boundingBox();
+    if (!targetBox) {
+      throw new Error("Unable to resolve drag coordinates.");
+    }
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 6 });
+    await page.mouse.up();
+    await expect(target.getByRole("button", { name: "Board 2", exact: true })).toBeVisible();
+  });
+});

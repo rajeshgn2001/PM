@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import {
   DndContext,
@@ -41,6 +41,14 @@ type BoardEntry = Pick<BoardSummary, "id" | "title" | "role" | "owner" | "open_c
 const SELECTED_KEY = "kanban_selected_board";
 const COLLAPSED_KEY = "kanban_collapsed_groups";
 
+// The share of the window's height, at its top and bottom, where a pull scrolls the page.
+const EDGE_SCROLL_ZONE = 0.1;
+
+const isAtWindowEdge = (y: number | null) => {
+  const zone = window.innerHeight * EDGE_SCROLL_ZONE;
+  return y !== null && (y <= zone || y >= window.innerHeight - zone);
+};
+
 const inputClass =
   "w-full rounded-xl border border-[var(--stroke)] bg-white px-3 py-2 text-sm text-[var(--navy-dark)] outline-none focus:border-[var(--primary-blue)]";
 
@@ -56,6 +64,23 @@ export const Workspace = ({ username, onLogout }: WorkspaceProps) => {
   const [renamingGroup, setRenamingGroup] = useState<BoardGroup | null>(null);
   const [collapsedIds, setCollapsedIds] = useState<number[]>([]);
   const [draggingId, setDraggingId] = useState<number | null>(null);
+  const pointerY = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (draggingId === null) {
+      return;
+    }
+    const track = (event: MouseEvent | TouchEvent) => {
+      pointerY.current = ("touches" in event ? event.touches[0] : event).clientY;
+    };
+    window.addEventListener("mousemove", track);
+    window.addEventListener("touchmove", track);
+    return () => {
+      window.removeEventListener("mousemove", track);
+      window.removeEventListener("touchmove", track);
+      pointerY.current = null;
+    };
+  }, [draggingId]);
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -302,12 +327,17 @@ export const Workspace = ({ username, onLogout }: WorkspaceProps) => {
                 {error}
               </p>
             )}
-            <div className="-mr-2 flex max-h-[50vh] flex-col gap-1 overflow-y-auto pr-2 lg:max-h-[calc(100vh-19rem)]">
+            <div className="-mr-2 flex max-h-[50vh] flex-col gap-1 overflow-y-auto pr-2 lg:max-h-none lg:overflow-visible">
               <DndContext
                 sensors={sensors}
                 collisionDetection={pointerWithin}
-                // Only the sidebar may scroll: scrolling the page would slide the groups out from under the pointer.
-                autoScroll={{ canScroll: (element) => element.closest("nav") !== null }}
+                // The page scrolls only with the pointer really at the window's edge, to reach groups below it.
+                // dnd-kit alone also scrolls it briefly on entering a group, sliding groups from under the pointer.
+                // A group's own list never scrolls during a pull.
+                autoScroll={{
+                  threshold: { x: 0, y: EDGE_SCROLL_ZONE },
+                  canScroll: (element) => element.closest("section") === null && isAtWindowEdge(pointerY.current),
+                }}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 onDragCancel={() => setDraggingId(null)}
